@@ -131,6 +131,24 @@ Estrutura detalhada de ritmo, composição e escalonamento: *TBD.*
 A quantidade e a posição dos ovos/ninho podem variar por mapa. Estrutura geral de mapas
 (quantidade planejada, critérios de design de nível, caminhos): *TBD.*
 
+### Princípio de Level Design
+
+> **O mapa deve criar decisões interessantes antes de o jogador possuir upgrades.**
+
+A geometria de um mapa (caminho, curvas, áreas construíveis com identidade estratégica própria,
+posição dos ovos) já deve gerar escolhas de posicionamento relevantes por si só — antes de
+qualquer sistema de evolução, upgrade ou economia entrar em cena. Este é um princípio de design
+do SPAYTCH, não uma regra específica de um mapa. Ver `Vale dos Ovos` (primeiro mapa,
+[ARCHITECTURE.md](ARCHITECTURE.md)) como primeira aplicação concreta desse princípio.
+
+### Vale dos Ovos (primeiro mapa)
+
+Primeiro mapa do jogo, com o objetivo de ensinar o jogador a proteger ovos, ler o caminho dos
+inimigos e reconhecer áreas estratégicas diferentes (DPS, controle/choke point, long range) —
+antes de qualquer upgrade existir. Layout técnico e decisões de implementação documentados em
+[ARCHITECTURE.md](ARCHITECTURE.md); este é apenas o registro de que o mapa existe e sua intenção
+de design. Balanceamento (dano, alcance, custo) não foi definido — fora de escopo desta fase.
+
 ## Economy
 
 Economia gira em torno de recursos ganhos **durante as partidas**.

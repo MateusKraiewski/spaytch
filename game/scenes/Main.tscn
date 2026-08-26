@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/core/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/map/grid_manager.gd" id="2"]
-[ext_resource type="Resource" path="res://data/maps/test_map.tres" id="3"]
+[ext_resource type="Resource" path="res://data/maps/vale_dos_ovos.tres" id="3"]
 [ext_resource type="Script" path="res://scripts/input/input_manager.gd" id="4"]
 
 [node name="Main" type="Node2D"]

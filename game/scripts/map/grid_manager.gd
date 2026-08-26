@@ -29,6 +29,9 @@ const HOVER_COLOR := Color(1, 1, 1, 0.9)
 
 func _ready() -> void:
 	assert(map_definition != null, "GridManager requires a MapDefinition assigned.")
+	var errors := MapValidator.validate(map_definition)
+	for error in errors:
+		push_warning("[GridManager] MapDefinition inválido: %s" % error)
 	grid = Grid.new(map_definition)
 	queue_redraw()
 

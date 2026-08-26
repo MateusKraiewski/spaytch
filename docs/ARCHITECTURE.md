@@ -4,11 +4,12 @@ Documento técnico vivo. Descreve a arquitetura do projeto conforme ela existe e
 Este documento é **descritivo do estado real do código**, não um plano aspiracional — atualize-o
 quando a arquitetura mudar de fato.
 
-> Status: **Phase 0.1 — Godot Foundation + Grid concluída e validada em Godot 4.7.2.** Existe um
-> projeto Godot funcional com uma cena principal, um sistema de grid lógica desacoplado de
-> renderização, e uma camada de input normalizada para mouse/touch. Nenhum sistema de gameplay
-> (torres, inimigos, waves, economia, combate) foi implementado. Seções abaixo descrevem o que
-> existe de fato; o que ainda não existe permanece `TBD`.
+> Status: **Phase 0.2 — Map Foundation + primeiro mapa (Vale dos Ovos) concluída e validada em
+> Godot 4.7.2.** Além da fundação da Phase 0.1, o projeto agora tem um mapa real de 20×12
+> (`data/maps/vale_dos_ovos.tres`) e uma validação de integridade de `MapDefinition`
+> (`MapValidator`). Nenhum sistema de gameplay (torres, inimigos, waves, economia, combate) foi
+> implementado. Seções abaixo descrevem o que existe de fato; o que ainda não existe permanece
+> `TBD`.
 
 ---
 
@@ -96,17 +97,26 @@ game/
 │   │   ├── cell.gd             # estado runtime de uma célula
 │   │   ├── grid.gd             # lógica pura da grid (RefCounted, testável)
 │   │   ├── grid_manager.gd     # node: render de debug + resolução de posição→célula
-│   │   └── map_definition.gd   # Resource: dado estático de mapa
+│   │   ├── map_definition.gd   # Resource: dado estático de mapa
+│   │   └── map_validator.gd    # validação de invariantes de um MapDefinition (RefCounted, estático)
 │   └── input/
 │       └── input_manager.gd    # normalização mouse/touch → sinais de ponteiro
 ├── data/
-│   └── maps/
-│       └── test_map.tres       # instância de MapDefinition usada como mapa de teste
+│   ├── maps/
+│   │   └── vale_dos_ovos.tres  # único mapa JOGÁVEL (Phase 0.2), carregado por Main.tscn
+│   └── test/
+│       └── test_map.tres       # fixture de teste (Phase 0.1) — não é mais mapa jogável
 ├── assets/                     # vazio nesta fase (sem arte final ainda)
 ├── ui/                         # vazio nesta fase (sem UI ainda)
 └── tests/
-    └── grid_tests.gd           # testes headless da lógica pura de Grid/MapDefinition
+    ├── grid_tests.gd           # testes headless da lógica pura de Grid/MapDefinition
+    ├── map_tests.gd            # testes headless de MapValidator + do mapa Vale dos Ovos
+    └── run_tests.ps1           # orquestra compile-check + testes (ver Phase 0.2.1)
 ```
+
+`data/maps/` guarda mapas jogáveis; `data/test/` guarda fixtures de dado usadas só por testes —
+essa separação de pastas (feita na Phase 0.2.1) deixa a distinção explícita no próprio caminho
+do arquivo, não apenas em comentário.
 
 Desvio documentado em relação à sugestão original: a pasta `tests/` foi adicionada (não estava
 na sugestão original de estrutura) para manter o código de teste separado do código de produção
@@ -160,24 +170,92 @@ necessidade demonstrada.
 `Resource` carregado do disco pode ser uma instância compartilhada; mutá-lo em runtime é uma
 armadilha comum no Godot. Estado mutável vive em `Cell`/`Grid` (ver abaixo).
 
-### Mapa de teste
+### Fixture de teste (`data/test/test_map.tres`)
 
-`data/maps/test_map.tres` é uma instância de `MapDefinition` 20×12 usada apenas para validar a
-Phase 0.1 (contém todos os 7 tipos de célula). Não é um mapa de design final — layout puramente
-funcional para debug.
+Instância de `MapDefinition` 20×12 usada apenas para validar a Phase 0.1 (contém todos os 7
+tipos de célula). Não é um mapa de design final. **Movida de `data/maps/` para `data/test/` na
+Phase 0.2.1** (nenhum script ou cena referenciava o caminho antigo — confirmado por busca antes
+da mudança) para deixar explícito, pelo próprio caminho do arquivo, que `data/maps/` contém
+apenas mapas jogáveis e `data/test/` guarda dado usado só por testes. Conteúdo do arquivo não
+foi alterado, só o caminho.
+
+### Vale dos Ovos (primeiro mapa, `data/maps/vale_dos_ovos.tres`)
+
+Primeiro mapa real do jogo (20×12), carregado por `GridManager.map_definition` em `Main.tscn`.
+Layout (proposto, aprovado com ajustes, e implementado nesta fase):
+
+```
+..................E.
+.O...............E.E
+..O..........PPPPPN.
+.............P.BB...
+.............P.BB...
+.............P.B....
+...BB.PPPPPPPP..O...
+..BBB.P.BBBB........
+...BB.P.BBBB....O...
+.SPPPPP......OO..O..
+.........BBB........
+..O......BBB........
+```
+
+Legenda: `.`=EMPTY `B`=BUILDABLE `P`=PATH `E`=EGG `O`=OBSTACLE `S`=SPAWN `N`=NEST.
+
+Decisões de design (não técnicas) por trás deste layout — nome, motivação de cada zona
+buildable, escolha das curvas do caminho — estão registradas em
+[GAME_BIBLE.md](GAME_BIBLE.md#vale-dos-ovos-primeiro-mapa) e no princípio de
+[level design](GAME_BIBLE.md#princípio-de-level-design) que o guiou. Resumo técnico:
+
+- SPAWN em `(1,9)`, NEST em `(18,2)`, caminho em S com 4 curvas (23 células PATH).
+- 3 EGG em arranjo triangular ao redor do ninho: `(18,0)`, `(17,1)`, `(19,1)`.
+- 3 zonas BUILDABLE com identidade estratégica (DPS, Controle, potencial Long Range) + 2 áreas
+  buildable adicionais (perto do spawn, perto da aproximação final) — o jogador não fica
+  limitado às 3 zonas nomeadas.
+- 8 OBSTACLE decorativos, posicionados e verificados (ver `MapValidator`/testes) para não serem
+  ortogonalmente adjacentes a nenhuma célula PATH/SPAWN/NEST — evita a leitura visual de que um
+  obstáculo "bloqueia" o caminho, já que não existe colisão física nesta fase.
+- Nenhuma cobertura de alcance é garantida pela geometria — a zona de long range é descrita como
+  **posição potencialmente favorável a unidades de longo alcance**, não como zona com alcance
+  garantido sobre trechos específicos do caminho, já que alcance/targeting/footprint de
+  dinossauros ainda não existem.
 
 ## Sistemas
 
-Nesta fase existe apenas o **sistema de grid**, dividido em três camadas:
+Nesta fase existem o **sistema de grid** e a **validação de mapa**:
 
 | Camada | Arquivo | Tipo | Responsabilidade |
 |---|---|---|---|
 | Dado estático | `map_definition.gd` | `Resource` | Definição autoral do mapa (tipos de célula) |
+| Validação | `map_validator.gd` | `RefCounted` (métodos estáticos) | Verifica invariantes de um `MapDefinition` (ver [MapValidator](#mapvalidator)) |
 | Lógica runtime | `grid.gd`, `cell.gd` | `RefCounted` | Conversões coordenada↔célula, limites, estado runtime por célula (`occupied`) |
-| Apresentação/Node | `grid_manager.gd` | `Node2D` | Constrói o `Grid` a partir do `MapDefinition`, desenha visual de debug, resolve posição de ponteiro → célula |
+| Apresentação/Node | `grid_manager.gd` | `Node2D` | Constrói o `Grid` a partir do `MapDefinition` (após validar), desenha visual de debug, resolve posição de ponteiro → célula |
 | Input | `input_manager.gd` | `Node` | Normaliza mouse/touch em sinais `pointer_moved` / `pointer_pressed` |
 
 Nenhum sistema de gameplay (economia, combate, waves, upgrades) existe ainda.
+
+### MapValidator
+
+`scripts/map/map_validator.gd` — funções estáticas que verificam um `MapDefinition` e retornam
+`Array[String]` de erros (vazio = válido). Verifica: dimensões válidas (`width`/`height` > 0),
+`cells.size() == width*height`, presença de exatamente 1 SPAWN e 1 NEST, presença de PATH,
+presença de ao menos 1 EGG, SPAWN/NEST cada um com ao menos uma célula PATH adjacente, e
+conectividade SPAWN→NEST (BFS sobre células PATH/SPAWN/NEST).
+
+**Decisão deliberada sobre quantidade de EGG:** o validador exige apenas **"ao menos 1 ovo"**,
+não um número fixo. `docs/GAME_BIBLE.md` (seção Ovos) já registra que a quantidade de ovos pode
+variar por mapa; travar "exatamente 3" nessa validação genérica contradiria essa decisão de
+design para mapas futuros. A exigência de **exatamente 3 ovos** é verificada como teste
+específico do mapa `vale_dos_ovos.tres` (`game/tests/map_tests.gd`), não como regra genérica do
+`MapValidator`.
+
+**Não é pathfinding:** a checagem de conectividade é um BFS único disparado sob demanda para
+validar dados de mapa em tempo de autoria/teste — não é um sistema consultado em runtime por
+inimigos (isso permanece uma responsabilidade futura e separada, fora do escopo desta fase).
+
+`GridManager._ready()` chama `MapValidator.validate()` e reporta cada erro via `push_warning()`
+antes de construir o `Grid` — não interrompe a execução (`assert` continua reservado para o caso
+mais grave de `map_definition` nulo). Erro em runtime é visível no log, mas não trava o jogo,
+para não impedir carregar mapas intencionalmente incompletos durante desenvolvimento/debug.
 
 ### CellType: enum vs. Resource
 
@@ -219,23 +297,111 @@ nenhum sistema) e a célula atualmente sob o cursor (`GridManager._hovered_coord
 **Abordagem:** sem dependências externas (nenhum addon como GUT foi adicionado). Testes usam
 apenas o `SceneTree` do próprio Godot em modo headless.
 
-**Arquivo:** `game/tests/grid_tests.gd` — cobre lógica pura de `Grid`:
-conversão coordenada→célula, célula→coordenada, limites da grid (dentro e fora), e
-`get_cell()` para coordenadas fora dos limites.
+**Arquivos:**
 
-**Como executar:**
+- `game/tests/grid_tests.gd` — lógica pura de `Grid`: conversão coordenada→célula,
+  célula→coordenada, limites da grid (dentro e fora), e `get_cell()` para coordenadas fora dos
+  limites.
+- `game/tests/map_tests.gd` (Phase 0.2) — `MapValidator` contra definições sintéticas (mapa
+  válido; dimensões inválidas; contagem de células incorreta; ausência de SPAWN/NEST/PATH/EGG;
+  SPAWN/NEST sem PATH adjacente; PATH descontínuo) e o mapa real `vale_dos_ovos.tres` (20×12,
+  240 células, exatamente 3 EGG, 1 SPAWN, 1 NEST, presença de PATH/BUILDABLE/OBSTACLE, e
+  `MapValidator.validate()` retornando zero erros).
+
+**Como executar (recomendado — inclui verificação de compilação, ver Phase 0.2.1):**
+
+```powershell
+game/tests/run_tests.ps1
+```
+
+**Como executar manualmente (sem a verificação de compilação prévia):**
 
 ```
 godot --headless --path game --script res://tests/grid_tests.gd
+godot --headless --path game --script res://tests/map_tests.gd
 ```
 
-Saída esperada: `[grid_tests] ALL TESTS PASSED` e código de saída `0`; em caso de falha, cada
-asserção que falhar é impressa e o código de saída é `1`.
+Saída esperada em cada um: `ALL TESTS PASSED` e código de saída `0`; em caso de falha, cada
+asserção que falhar é impressa e o código de saída é `1`. **Rodar os dois comandos manualmente,
+sem o `run_tests.ps1`, reintroduz o risco documentado no Phase 0.2.1 abaixo** — prefira sempre
+`run_tests.ps1` quando possível.
 
-> **Atualização:** com Godot 4.7.2 instalado no ambiente, os testes acima foram executados e
-> confirmados (`ALL TESTS PASSED`, exit code `0`), assim como a abertura/escaneamento completo
-> do projeto no editor, sem erros. Ver [Validação executada (Godot 4.7.2)](#validação-executada-godot-472).
-> A limitação original (Godot não instalado) não se aplica mais.
+> **Problema descoberto na Phase 0.2, corrigido na Phase 0.2.1** (ver
+> [Phase 0.2.1 — Test Harness Hardening](#phase-021--test-harness-hardening) abaixo): um bug
+> real de tipagem em `map_validator.gd` fez o script falhar ao compilar em Godot 4.7.2, mas
+> `map_tests.gd` mesmo assim imprimiu `ALL TESTS PASSED` com exit code `0`. Isso não pode mais
+> acontecer sem ser detectado — `game/tests/run_tests.ps1` agora verifica a compilação de todo
+> script antes de rodar qualquer teste.
+
+> **Atualização (Phase 0.1):** com Godot 4.7.2 instalado no ambiente, os testes de grid foram
+> executados e confirmados (`ALL TESTS PASSED`, exit code `0`), assim como a abertura/escaneamento
+> completo do projeto no editor, sem erros. Ver
+> [Validação executada (Godot 4.7.2)](#validação-executada-godot-472). A limitação original
+> (Godot não instalado) não se aplica mais.
+
+## Phase 0.2.1 — Test Harness Hardening
+
+**Problema:** durante a Phase 0.2, `godot --headless --path game --script res://tests/map_tests.gd`
+imprimiu `[map_tests] ALL TESTS PASSED` com exit code `0`, mesmo com um bug real de compilação em
+`map_validator.gd` (constante de offsets sem tipo explícito) e várias linhas `SCRIPT ERROR` no
+output. Um falso positivo: os testes "passaram" sem nunca terem de fato rodado a lógica que
+deveriam validar.
+
+**Causa raiz:** `MapValidator` é referenciado em `map_tests.gd` através do sistema de
+`class_name` global do Godot (não `preload`/`load` explícito). Quando `map_validator.gd` falha
+ao compilar, essa referência não vira um erro fatal de carregamento do script chamador — a
+chamada `MapValidator.validate(...)` falha em runtime (`Invalid call. Nonexistent function`),
+imprime um `SCRIPT ERROR`, e a execução **continua** normalmente para a linha seguinte (GDScript
+não tem exceções). Como o retorno da chamada quebrada acabou não incrementando o contador de
+falhas do harness (`_failures`), o teste terminou achando que nada deu errado.
+
+**Investigação do mecanismo correto (empírica, contra Godot 4.7.2 real, bug reintroduzido
+temporariamente e depois revertido):**
+
+| Comando | Resultado com `map_validator.gd` quebrado |
+|---|---|
+| `--script map_tests.gd` (execução normal) | `SCRIPT ERROR` no output, mas **exit code 0** — não confiável |
+| `--check-only --script map_tests.gd` (o arquivo que *depende* do quebrado) | `SCRIPT ERROR` no output, mas **exit code 0** — não confiável |
+| `--check-only --script grid_manager.gd` (outro arquivo que depende do quebrado) | mesmo padrão — **exit code 0** — não confiável |
+| `--editor --quit` (scan completo do projeto) | `SCRIPT ERROR` no output, mas **exit code 0** — não confiável |
+| `--check-only --script map_validator.gd` (**o arquivo que contém o erro**) | **exit code 1** — confiável |
+| `--check-only --script grid.gd` (arquivo saudável, não relacionado) | exit code `0`, sem output de erro — sem falso negativo |
+
+**Limitação real do Godot 4.7.2 (headless), documentada aqui pois não há como contornar sem
+rodar contra o binário real:** o exit code de `--check-only` só reflete um erro de
+compilação quando o **arquivo apontado diretamente** é o que contém o problema. Um erro em uma
+dependência (via `class_name` global) não se propaga para o exit code de quem depende dela — nem
+mesmo o escaneamento completo do projeto (`--editor --quit`) propaga esse tipo de erro para seu
+próprio exit code. Isso não é um problema do projeto SPAYTCH; é um comportamento do Godot 4.7.2
+em si.
+
+**Solução implementada — `game/tests/run_tests.ps1`:** já que não é possível saber de antemão
+qual arquivo tem o problema, o script roda `--check-only --script <arquivo>` **individualmente
+em cada um dos `.gd` do projeto** (10 arquivos nesta fase). Como a tabela acima mostra, checar o
+arquivo problemático diretamente sempre retorna exit code correto — então essa varredura
+completa garante que o arquivo com erro (seja ele qual for) será apontado diretamente em algum
+momento e vai falhar. Só se **todos** os arquivos compilarem limpo é que os testes
+(`grid_tests.gd`, `map_tests.gd`) são executados; qualquer falha de compilação aborta antes
+disso, sem rodar teste nenhum. Não usa nenhuma busca de string arbitrária no stdout — só exit
+codes reais retornados pelo próprio Godot via `--check-only`, e nenhuma dependência externa além
+do binário do Godot já usado no projeto.
+
+**Verificação do próprio mecanismo:** o bug de `map_validator.gd` foi reintroduzido
+temporariamente (mesma mudança: remover a anotação `Array[Vector2i]`) e `run_tests.ps1` rodado
+contra ele — abortou corretamente na Fase 1 (compile-check), identificando exatamente
+`res://scripts/map/map_validator.gd` como o arquivo com problema, com exit code `1`, **sem**
+rodar nenhum teste. O bug foi então revertido (arquivo restaurado ao estado correto) e
+`run_tests.ps1` rodado novamente, confirmando os 10 scripts compilando limpo e os dois test
+suites passando (exit code `0` no final). Nenhum artefato temporário de teste ficou no projeto —
+a mudança foi feita e revertida na mesma linha do arquivo já existente, nada novo foi criado só
+para esse experimento.
+
+**Harnesses auditados (`grid_tests.gd`, `map_tests.gd`):** ambos usam o mesmo padrão —
+`_failures: int`, helper `_check(condition, message)` que incrementa `_failures` e imprime a
+falha, e `quit(1 if _failures > 0 else 0)` no fim de `_initialize()`. Comportamento consistente
+entre os dois; nenhuma mudança foi necessária nesses dois arquivos — o problema era inteiramente
+externo a eles (uma dependência falhando ao compilar), o que nenhuma lógica interna a um desses
+scripts poderia detectar sozinha. A correção tinha que vir de fora (`run_tests.ps1`).
 
 ## Decisões técnicas adicionais desta fase
 
@@ -258,3 +424,26 @@ asserção que falhar é impressa e o código de saída é `1`.
 - **Orientação:** `window/handheld/orientation="landscape"`, inferido diretamente da resolução
   interna 640×384 (mais larga que alta), não de uma decisão de design documentada em
   `GAME_BIBLE.md`. Sinalizar se isso não corresponder à intenção real do projeto.
+
+## Decisões técnicas — Phase 0.2
+
+- **`MapDefinition` continua sendo a única fonte de verdade.** Nenhum array duplicado foi
+  adicionado para spawn/nest/egg/buildable do Vale dos Ovos — tudo deriva de `cells` via
+  `get_positions_of_type()`, já existente desde a Phase 0.1.
+- **`MapValidator` como classe separada, não método em `MapDefinition`.** A validação envolve um
+  algoritmo (BFS de conectividade, várias checagens) — comportamento, não dado. Mantê-la fora do
+  `Resource` segue o princípio de separar dados de comportamento do `CLAUDE.md` e evita que
+  `MapDefinition` cresça além de ser um contêiner de dados simples.
+- **Gotcha de tipagem estática do GDScript em Godot 4.7:** um array literal atribuído a uma
+  `const` sem anotação de tipo explícita (`const X := [Vector2i(...), ...]`) é inferido como
+  `Array` genérico, não `Array[Vector2i]`. Iterar esse array e usar o item em uma expressão com
+  `:=` (ex: `var neighbor := coord + offset`) falha ao compilar com "Cannot infer the type...".
+  Correção: anotar o tipo explicitamente (`const X: Array[Vector2i] = [...]`). Isso foi
+  descoberto rodando os testes de verdade contra Godot 4.7.2 — reforça o valor de validar com o
+  motor real em vez de apenas inspecionar o código (ver também o cuidado operacional registrado
+  em [Testes](#testes)).
+- **`GridManager` não cresceu para além do razoável.** A única adição desta fase em
+  `grid_manager.gd` foi chamar `MapValidator.validate()` no `_ready()` e logar os erros — 4
+  linhas. Se validação de mapa ganhar mais responsabilidade (ex: validação assíncrona, UI de
+  erro), deve ser extraída para um componente próprio antes de crescer mais dentro de
+  `GridManager`.

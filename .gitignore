@@ -1,0 +1,9 @@
+# Godot 4 — o projeto Godot vive em game/ (game/project.godot é a raiz res://)
+game/.godot/
+game/android/
+game/export_presets.cfg
+game/*.translation
+
+# Import cache / build artifacts
+game/.import/
+*.tmp

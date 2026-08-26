@@ -1,0 +1,17 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/main.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/map/grid_manager.gd" id="2"]
+[ext_resource type="Resource" path="res://data/maps/test_map.tres" id="3"]
+[ext_resource type="Script" path="res://scripts/input/input_manager.gd" id="4"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1")
+
+[node name="GridManager" type="Node2D" parent="."]
+script = ExtResource("2")
+map_definition = ExtResource("3")
+debug_visible = true
+
+[node name="InputManager" type="Node" parent="."]
+script = ExtResource("4")

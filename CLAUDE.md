@@ -5,7 +5,8 @@ Instruções globais para trabalho neste projeto. Leia antes de implementar qual
 ## Sobre o Projeto
 
 **SPAYTCH** é um Tower Defense 2D em pixel art, desenvolvido em **Godot 4.x**, com lançamento
-planejado para **PC e Android**.
+planejado para **PC e Android**. A versão de desenvolvimento alvo é **Godot 4.7** (ver
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para detalhes e racional).
 
 Documentação de referência:
 - Visão de jogo e conteúdo: [docs/GAME_BIBLE.md](docs/GAME_BIBLE.md)

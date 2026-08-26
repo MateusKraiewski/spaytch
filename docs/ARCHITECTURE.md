@@ -4,11 +4,59 @@ Documento técnico vivo. Descreve a arquitetura do projeto conforme ela existe e
 Este documento é **descritivo do estado real do código**, não um plano aspiracional — atualize-o
 quando a arquitetura mudar de fato.
 
-> Status: **Phase 0.1 — Godot Foundation + Grid concluída.** Existe um projeto Godot 4.x
-> funcional com uma cena principal, um sistema de grid lógica desacoplado de renderização, e uma
-> camada de input normalizada para mouse/touch. Nenhum sistema de gameplay (torres, inimigos,
-> waves, economia, combate) foi implementado. Seções abaixo descrevem o que existe de fato; o que
-> ainda não existe permanece `TBD`.
+> Status: **Phase 0.1 — Godot Foundation + Grid concluída e validada em Godot 4.7.2.** Existe um
+> projeto Godot funcional com uma cena principal, um sistema de grid lógica desacoplado de
+> renderização, e uma camada de input normalizada para mouse/touch. Nenhum sistema de gameplay
+> (torres, inimigos, waves, economia, combate) foi implementado. Seções abaixo descrevem o que
+> existe de fato; o que ainda não existe permanece `TBD`.
+
+---
+
+## Versão do Godot
+
+**Godot 4.7 é a versão de desenvolvimento alvo do projeto SPAYTCH.**
+
+O projeto foi originalmente escrito tendo Godot 4.3+ como referência (sem editor disponível para
+validação). Com Godot **4.7.2 stable** instalado no ambiente de desenvolvimento, o projeto foi
+aberto, escaneado e executado nessa versão sem nenhum erro — não houve necessidade de correção
+de código ou de configuração; apenas metadados que o próprio editor gerencia automaticamente
+mudaram (ver abaixo).
+
+Não há, até o momento, nenhuma razão técnica conhecida para restringir o projeto a uma versão 4.x
+mais antiga que 4.7 — nenhuma API usada é específica de uma versão anterior, e nenhum recurso do
+projeto depende de comportamento removido/alterado em 4.7. Se isso mudar (ex: dependência de uma
+API introduzida ou removida em uma versão específica), deve ser registrado aqui com justificativa.
+
+O que o editor 4.7.2 alterou automaticamente ao abrir o projeto (não foi uma correção manual):
+
+- `config/features` em `project.godot` passou de `"4.3"` para `"4.7"` — apenas metadado
+  informativo da versão, sem efeito funcional.
+- Uma seção `[animation]` com
+  `compatibility/default_parent_skeleton_in_mesh_instance_3d=true` foi adicionada — configuração
+  de compatibilidade de esqueleto 3D que o editor passou a escrever por padrão; irrelevante para
+  este projeto 2D, não requer ação.
+- `window/stretch/aspect="keep"` deixou de aparecer explicitamente em `project.godot` — o valor
+  não mudou, o editor apenas parou de escrever valores iguais ao padrão (`"keep"` já é o default
+  do motor). Comportamento de stretch permanece o mesmo.
+- Um arquivo `.uid` sidecar foi gerado para cada script (`res://scripts/**/*.gd.uid`,
+  `res://tests/grid_tests.gd.uid`) — sistema de identificação estável de recursos do Godot
+  4.4+. **Devem ser versionados no Git** (não são cache; são referências estáveis usadas pelo
+  motor), diferente de `.godot/` (cache local, já ignorado em `.gitignore`).
+
+## Validação executada (Godot 4.7.2)
+
+- `godot --headless --path game --script res://tests/grid_tests.gd` → `[grid_tests] ALL TESTS
+  PASSED`, exit code `0`.
+- `godot --headless --path game --quit-after 30` (roda a cena principal por 30 frames) → nenhum
+  erro ou warning, exit code `0`.
+- `godot --headless --editor --quit --path game` (escaneamento completo do projeto pelo editor)
+  → nenhum erro de parsing em nenhum script/cena/resource, exit code `0`.
+- Log real de uma sessão jogada manualmente (`%APPDATA%/Godot/app_userdata/SPAYTCH/logs/godot.log`)
+  confirma que mouse hover/clique identificam células corretamente (`BUILDABLE`, `PATH`,
+  `EMPTY`, `OBSTACLE` reportados corretamente para as coordenadas clicadas), usando o renderer
+  `Compatibility` (OpenGL 3.3) conforme configurado.
+
+A Phase 0.1 continua válida sob Godot 4.7 — nenhuma regressão encontrada.
 
 ---
 
@@ -184,11 +232,10 @@ godot --headless --path game --script res://tests/grid_tests.gd
 Saída esperada: `[grid_tests] ALL TESTS PASSED` e código de saída `0`; em caso de falha, cada
 asserção que falhar é impressa e o código de saída é `1`.
 
-> **Limitação conhecida:** o Godot 4.x não está instalado no ambiente onde esta fase foi
-> implementada, então os testes acima e a abertura do projeto no editor **não puderam ser
-> executados/verificados localmente**. O código foi escrito e revisado com atenção à sintaxe e
-> ao formato de arquivo do Godot 4.3+, mas deve ser aberto no editor e validado antes de ser
-> considerado definitivamente livre de erros.
+> **Atualização:** com Godot 4.7.2 instalado no ambiente, os testes acima foram executados e
+> confirmados (`ALL TESTS PASSED`, exit code `0`), assim como a abertura/escaneamento completo
+> do projeto no editor, sem erros. Ver [Validação executada (Godot 4.7.2)](#validação-executada-godot-472).
+> A limitação original (Godot não instalado) não se aplica mais.
 
 ## Decisões técnicas adicionais desta fase
 

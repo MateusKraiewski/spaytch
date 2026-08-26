@@ -34,10 +34,10 @@ de qualquer gameplay.
       normalizados por uma camada de `InputManager` comum
 - [x] Testes headless da lógica pura da grid (`game/tests/grid_tests.gd`)
 - [x] `docs/ARCHITECTURE.md` atualizado com as decisões técnicas reais desta fase
-- [ ] **Não verificado:** abertura do projeto no editor Godot e execução dos testes — Godot 4.x
-      não está instalado no ambiente onde esta fase foi implementada. Verificação manual
-      pendente antes de considerar a fase totalmente encerrada (ver limitação registrada em
-      `docs/ARCHITECTURE.md`).
+- [x] Validado com Godot **4.7.2** instalado localmente: projeto abre sem erros, testes headless
+      passam (`ALL TESTS PASSED`), cena principal roda sem erro/warning, e uma sessão jogada
+      manualmente confirma mouse hover/clique identificando células corretamente — ver
+      [ARCHITECTURE.md](ARCHITECTURE.md#versão-do-godot)
 
 ## Phase 1 — Core Prototype
 

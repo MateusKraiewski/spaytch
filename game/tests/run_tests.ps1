@@ -3,20 +3,32 @@
     Verifica a compilação de todos os scripts do projeto e, só então, roda os testes headless.
 
 .DESCRIPTION
-    Corrige o falso positivo descoberto na Phase 0.2: `godot --headless --script X.gd` pode
-    imprimir "ALL TESTS PASSED" com exit code 0 mesmo quando um script do qual X.gd depende
-    (referenciado via class_name, ex: MapValidator) falhou ao compilar. Confirmado
-    empiricamente em Godot 4.7.2 (ver docs/ARCHITECTURE.md, "Phase 0.2.1"):
+    Corrige dois problemas reais descobertos rodando contra Godot 4.7.2 (ver
+    docs/ARCHITECTURE.md, "Phase 0.2.1" e "Phase 0.3"):
 
-      - `--check-only --script <arquivo-com-o-erro>`        -> exit code != 0 (confiável)
-      - `--check-only --script <arquivo-que-DEPENDE-dele>`   -> exit code 0 (NÃO confiável)
-      - `--editor --quit` (scan completo do projeto)         -> exit code 0 (NÃO confiável)
+    1) `godot --headless --script X.gd` pode imprimir "ALL TESTS PASSED" com exit code 0
+       mesmo quando um script do qual X.gd depende (referenciado via class_name, ex:
+       MapValidator) falhou ao compilar.
 
-    Ou seja, Godot só propaga o erro de compilação no exit code quando o arquivo checado é
-    exatamente aquele com o problema. Este script contorna essa limitação rodando
-    `--check-only` em CADA .gd do projeto, individualmente, antes de rodar qualquer teste —
-    isso garante que o arquivo com erro (seja ele qual for) será checado diretamente em algum
-    momento da varredura e vai falhar com exit code != 0, abortando a execução dos testes.
+         - `--check-only --script <arquivo-com-o-erro>`        -> exit code != 0 (confiável)
+         - `--check-only --script <arquivo-que-DEPENDE-dele>`   -> exit code 0 (NÃO confiável)
+         - `--editor --quit` (scan completo do projeto)         -> exit code 0 (NÃO confiável)
+
+       Godot só propaga o erro de compilação no exit code quando o arquivo checado é
+       exatamente aquele com o problema. Este script contorna isso rodando `--check-only` em
+       CADA .gd do projeto, individualmente, antes de rodar qualquer teste — garante que o
+       arquivo com erro (seja ele qual for) será checado diretamente em algum momento da
+       varredura e vai falhar com exit code != 0, abortando a execução dos testes.
+
+    2) O cache de classes globais do Godot (registro de `class_name`, persistido em
+       `.godot/global_script_class_cache.cfg`) só é atualizado por um scan de projeto do
+       editor (`--editor --quit`) — NÃO automaticamente por uma execução normal ou por
+       `--check-only`. Um `class_name` novo (ex: MapPath, BasicEnemy, EnemySpawner ao serem
+       criados na Phase 0.3) fica invisível para QUALQUER outro script — inclusive em
+       execução normal do jogo, não só em `--check-only` — até esse cache ser atualizado.
+       Sem isso, todo o compile-check (e a própria execução do jogo) falha com
+       "Identifier not found" para classes que na verdade estão corretas. Por isso este
+       script sempre roda um `--editor --quit` de refresh ANTES do compile-check por arquivo.
 
     Não depende de nenhum addon externo — só do próprio binário do Godot.
 
@@ -42,7 +54,12 @@ if (-not $godotCmd) {
 }
 $Godot = $godotCmd.Source
 
-Write-Host "== Phase 1/2: compile-check every .gd script individually ==" -ForegroundColor Cyan
+Write-Host "== Phase 1/3: refresh global class_name cache (editor scan) ==" -ForegroundColor Cyan
+& $Godot --headless --editor --quit --path $ProjectPath | Out-Null
+Write-Host "  Cache refreshed."
+
+Write-Host ""
+Write-Host "== Phase 2/3: compile-check every .gd script individually ==" -ForegroundColor Cyan
 $scriptFiles = Get-ChildItem -Path $ProjectPath -Recurse -Filter *.gd |
     Where-Object { $_.FullName -notmatch '\\\.godot\\' }
 
@@ -66,8 +83,14 @@ if ($compileFailures.Count -gt 0) {
 Write-Host "  All $($scriptFiles.Count) scripts compiled cleanly." -ForegroundColor Green
 
 Write-Host ""
-Write-Host "== Phase 2/2: run test suites ==" -ForegroundColor Cyan
-$testFiles = @("res://tests/grid_tests.gd", "res://tests/map_tests.gd")
+Write-Host "== Phase 3/3: run test suites ==" -ForegroundColor Cyan
+$testFiles = @(
+    "res://tests/grid_tests.gd",
+    "res://tests/map_tests.gd",
+    "res://tests/path_tests.gd",
+    "res://tests/enemy_tests.gd",
+    "res://tests/integration_tests.gd"
+)
 $testFailures = @()
 foreach ($test in $testFiles) {
     Write-Host "-- $test --"

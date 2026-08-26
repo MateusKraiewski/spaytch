@@ -95,6 +95,40 @@ de qualquer gameplay.
 - [x] `docs/ARCHITECTURE.md` atualizado com o mecanismo, a limitação do Godot descoberta, e a
       nova localização de `test_map.tres`
 
+### Phase 0.3 — Path System + Primeiro Inimigo + Movimento
+
+- [x] `MapPath` (`scripts/map/map_path.gd`): converte as células PATH de um `MapDefinition` em
+      uma sequência ordenada e determinística de waypoints (SPAWN → ... → NEST), seguindo só
+      vizinhos ortogonais; rejeita bifurcação, "loop" (mesmo mecanismo da bifurcação), célula
+      PATH solta — path following, sem A*/BFS por inimigo
+- [x] `BasicEnemy` (`scripts/enemies/basic_enemy.gd` + `scenes/enemies/BasicEnemy.tscn`):
+      placeholder visual (Polygon2D triângulo, claramente temporário), percorre waypoints em
+      espaço de mundo com `speed` configurável (TBD/placeholder balance), movimento
+      independente de FPS via `step(delta)` público (sem overshoot, sem jitter), orientação
+      aproximada para o próximo waypoint, emite `reached_nest` ao terminar sem se autodestruir
+- [x] `EnemySpawner` (`scripts/enemies/enemy_spawner.gd`): spawn manual único ao iniciar `Main`,
+      converte waypoints de grid para mundo via `Grid.cell_center_world()` (conversão
+      centralizada, não duplicada), reemite `enemy_reached_nest` e loga a chegada
+- [x] `Main.gd` (composition root) constrói o `MapPath` e liga `Grid`+`MapPath` ao
+      `EnemySpawner` — nenhuma lógica de path/inimigo dentro de `GridManager`
+- [x] Testes determinísticos — `game/tests/path_tests.gd` (mapa real + 3 topologias sintéticas
+      inválidas rejeitadas) e `game/tests/enemy_tests.gd` (posição/índice inicial, avanço,
+      chegada, sinal, independência de FPS, sem movimento após terminar)
+- [x] Teste de integração — `game/tests/integration_tests.gd`: `Main.tscn` real ponta a ponta
+      (mapa → path → spawn → percurso completo → `enemy_reached_nest`), separado dos testes de
+      lógica pura
+- [x] Duas limitações reais de Godot 4.7.2 descobertas rodando os testes de verdade (não só
+      inspecionando código) e corrigidas em `run_tests.ps1`/`integration_tests.gd`: cache de
+      `class_name` global não atualiza sem scan do editor; `_ready()` não é síncrono ao
+      `add_child()` num script `SceneTree` customizado — ver
+      [ARCHITECTURE.md](ARCHITECTURE.md#phase-03--path-system--primeiro-inimigo--movimento)
+- [x] `run_tests.ps1` atualizado (refresh de cache como nova Fase 1/3 + 3 novos testes) e
+      validado limpo: compile-check, todos os testes, `--quit-after 30`, `--editor --quit` —
+      sem `SCRIPT ERROR`, sem `Parse Error`, exit codes corretos
+- [x] `docs/ARCHITECTURE.md` atualizado com a arquitetura, decisões e limitações reais desta fase
+- [ ] Nenhum sistema de combate, dano, HP de ovos, economia, waves, targeting, torres ou dano foi
+      implementado — fora de escopo desta fase, conforme planejado
+
 ## Phase 1 — Core Prototype
 
 **Objetivo:** protótipo jogável mínimo validando o core loop (uma torre, um inimigo, um

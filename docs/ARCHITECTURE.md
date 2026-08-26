@@ -4,12 +4,13 @@ Documento técnico vivo. Descreve a arquitetura do projeto conforme ela existe e
 Este documento é **descritivo do estado real do código**, não um plano aspiracional — atualize-o
 quando a arquitetura mudar de fato.
 
-> Status: **Phase 0.2 — Map Foundation + primeiro mapa (Vale dos Ovos) concluída e validada em
-> Godot 4.7.2.** Além da fundação da Phase 0.1, o projeto agora tem um mapa real de 20×12
-> (`data/maps/vale_dos_ovos.tres`) e uma validação de integridade de `MapDefinition`
-> (`MapValidator`). Nenhum sistema de gameplay (torres, inimigos, waves, economia, combate) foi
-> implementado. Seções abaixo descrevem o que existe de fato; o que ainda não existe permanece
-> `TBD`.
+> Status: **Phase 0.3 — Path System + primeiro inimigo + movimento, concluída e validada em
+> Godot 4.7.2.** Além da fundação (Phase 0.1) e do primeiro mapa (Phase 0.2), o projeto agora
+> converte o PATH do mapa em uma sequência ordenada de waypoints (`MapPath`, path following, não
+> pathfinding), spawna um `BasicEnemy` placeholder que percorre esse caminho de SPAWN a NEST de
+> forma independente de FPS, e emite um sinal ao chegar. Nenhum sistema de combate, economia,
+> waves, targeting, torres ou dano existe ainda. Seções abaixo descrevem o que existe de fato; o
+> que ainda não existe permanece `TBD`.
 
 ---
 
@@ -98,9 +99,13 @@ game/
 │   │   ├── grid.gd             # lógica pura da grid (RefCounted, testável)
 │   │   ├── grid_manager.gd     # node: render de debug + resolução de posição→célula
 │   │   ├── map_definition.gd   # Resource: dado estático de mapa
-│   │   └── map_validator.gd    # validação de invariantes de um MapDefinition (RefCounted, estático)
-│   └── input/
-│       └── input_manager.gd    # normalização mouse/touch → sinais de ponteiro
+│   │   ├── map_validator.gd    # validação de invariantes de um MapDefinition (RefCounted, estático)
+│   │   └── map_path.gd         # PATH -> sequência ordenada de waypoints (RefCounted, testável)
+│   ├── input/
+│   │   └── input_manager.gd    # normalização mouse/touch → sinais de ponteiro
+│   └── enemies/
+│       ├── basic_enemy.gd      # movimento (path following) de um inimigo, Node2D
+│       └── enemy_spawner.gd    # cria BasicEnemy a partir de Grid+MapPath, Node
 ├── data/
 │   ├── maps/
 │   │   └── vale_dos_ovos.tres  # único mapa JOGÁVEL (Phase 0.2), carregado por Main.tscn
@@ -111,7 +116,10 @@ game/
 └── tests/
     ├── grid_tests.gd           # testes headless da lógica pura de Grid/MapDefinition
     ├── map_tests.gd            # testes headless de MapValidator + do mapa Vale dos Ovos
-    └── run_tests.ps1           # orquestra compile-check + testes (ver Phase 0.2.1)
+    ├── path_tests.gd           # testes headless de MapPath (ordenação, rejeição de dados impossíveis)
+    ├── enemy_tests.gd          # testes headless de movimento de BasicEnemy (step() puro)
+    ├── integration_tests.gd    # teste de integração: Main.tscn real, ponta a ponta
+    └── run_tests.ps1           # orquestra refresh de cache + compile-check + testes (ver Phase 0.2.1/0.3)
 ```
 
 `data/maps/` guarda mapas jogáveis; `data/test/` guarda fixtures de dado usadas só por testes —
@@ -124,27 +132,42 @@ em `scripts/`, seguindo convenção comum e atendendo ao requisito de testes da 
 
 ## Cenas (Scenes)
 
-Uma única cena existe: `scenes/Main.tscn`. Hierarquia:
+Duas cenas existem: `scenes/Main.tscn` e `scenes/enemies/BasicEnemy.tscn`. Hierarquia de `Main`:
 
 ```
 Main (Node2D, main.gd)
 ├── GridManager (Node2D, grid_manager.gd)
-└── InputManager (Node, input_manager.gd)
+├── InputManager (Node, input_manager.gd)
+└── EnemySpawner (Node, enemy_spawner.gd)
+        └── (BasicEnemy instanciado em runtime por spawn_enemy())
 ```
 
-`Main` não contém lógica própria além de conectar sinais no `_ready()` — é o composition root.
-`GridManager` e `InputManager` são desacoplados entre si; nenhum dos dois referencia o outro
-diretamente. Convenção adotada: cenas devem permanecer pequenas e cada responsabilidade
-(dados/lógica de grid, renderização de debug, input) deve ter seu próprio script.
+`Main` não contém lógica de grid/input/path/inimigo própria além de: conectar sinais no
+`_ready()`, construir o `MapPath` a partir do `MapDefinition` já carregado por `GridManager`, e
+entregar `Grid` + `MapPath` ao `EnemySpawner` para o spawn inicial (Phase 0.3 — spawn manual
+único, sem wave manager ainda). `GridManager`, `InputManager` e `EnemySpawner` são desacoplados
+entre si; nenhum referencia os outros diretamente — `Main` é o único ponto de wiring
+(*composition root*). Convenção mantida: cenas pequenas, cada responsabilidade em seu próprio
+script.
+
+`scenes/enemies/BasicEnemy.tscn`:
+
+```
+BasicEnemy (Node2D, basic_enemy.gd)
+└── Placeholder (Polygon2D)   # visual TEMPORÁRIO — triângulo laranja, ver Enemies abaixo
+```
 
 ## Scripts
 
 - Linguagem: **GDScript** (decisão do escopo desta fase; C# não foi avaliado).
 - Convenção de nomenclatura: `snake_case.gd` para arquivos, `PascalCase` para `class_name`.
 - Classes com `class_name` (`CellType`, `Cell`, `Grid`, `MapDefinition`, `GridManager`,
-  `InputManager`) são registradas globalmente pelo Godot e não exigem `preload`/`load` manual.
+  `InputManager`, `MapValidator`, `MapPath`, `BasicEnemy`, `EnemySpawner`) são registradas
+  globalmente pelo Godot e não exigem `preload`/`load` manual — **mas o registro depende de um
+  scan de projeto já ter rodado** (ver limitação documentada na [Phase 0.3](#phase-03--path-system--primeiro-inimigo--movimento) abaixo).
 - Regra aplicada: dado configurável/estático → `Resource` (`MapDefinition`); comportamento e
-  estado runtime → script comum (`Grid`, `Cell`, `GridManager`, `InputManager`).
+  estado runtime → script comum (`Grid`, `Cell`, `GridManager`, `InputManager`, `MapPath`,
+  `BasicEnemy`, `EnemySpawner`).
 
 ## Resources
 
@@ -221,7 +244,8 @@ buildable, escolha das curvas do caminho — estão registradas em
 
 ## Sistemas
 
-Nesta fase existem o **sistema de grid** e a **validação de mapa**:
+Nesta fase existem o **sistema de grid**, a **validação de mapa**, o **sistema de path** e o
+**primeiro inimigo**:
 
 | Camada | Arquivo | Tipo | Responsabilidade |
 |---|---|---|---|
@@ -230,8 +254,11 @@ Nesta fase existem o **sistema de grid** e a **validação de mapa**:
 | Lógica runtime | `grid.gd`, `cell.gd` | `RefCounted` | Conversões coordenada↔célula, limites, estado runtime por célula (`occupied`) |
 | Apresentação/Node | `grid_manager.gd` | `Node2D` | Constrói o `Grid` a partir do `MapDefinition` (após validar), desenha visual de debug, resolve posição de ponteiro → célula |
 | Input | `input_manager.gd` | `Node` | Normaliza mouse/touch em sinais `pointer_moved` / `pointer_pressed` |
+| Path | `map_path.gd` | `RefCounted` (fábrica estática) | Converte as células PATH de um `MapDefinition` em uma sequência ordenada de waypoints (ver [MapPath](#mappath--path-following)) |
+| Inimigo | `basic_enemy.gd` | `Node2D` | Percorre uma lista de waypoints em espaço de mundo, independente de FPS (ver [BasicEnemy e EnemySpawner](#basicenemy-e-enemyspawner)) |
+| Spawn | `enemy_spawner.gd` | `Node` | Cria um `BasicEnemy`, converte waypoints de grid para mundo via `Grid`, inicia o movimento |
 
-Nenhum sistema de gameplay (economia, combate, waves, upgrades) existe ainda.
+Nenhum sistema de combate, economia, waves, upgrades ou targeting existe ainda.
 
 ### MapValidator
 
@@ -256,6 +283,90 @@ inimigos (isso permanece uma responsabilidade futura e separada, fora do escopo 
 antes de construir o `Grid` — não interrompe a execução (`assert` continua reservado para o caso
 mais grave de `map_definition` nulo). Erro em runtime é visível no log, mas não trava o jogo,
 para não impedir carregar mapas intencionalmente incompletos durante desenvolvimento/debug.
+
+### MapPath — Path Following
+
+`scripts/map/map_path.gd` — converte o conjunto (sem ordem) de células `PATH` de um
+`MapDefinition` em uma sequência **ordenada e determinística** de waypoints (`Array[Vector2i]`,
+em coordenadas de grid, do SPAWN ao NEST — ambos incluídos como primeiro/último elemento).
+
+**Path following, não pathfinding:** o level designer já desenha o único caminho no mapa; não há
+descoberta de rota, não há A*, não há BFS por inimigo. O algoritmo roda **uma única vez por
+mapa** (em `Main._ready()`), e o resultado é reutilizado por qualquer inimigo que precise dele —
+inimigos apenas consomem a lista pronta, nunca recalculam nada.
+
+**Algoritmo** (`MapPath.build(definition) -> MapPath`): a partir do SPAWN, segue repetidamente o
+único vizinho ortogonal (cima/baixo/esquerda/direita — sem diagonais) do tipo PATH/NEST ainda não
+visitado, até alcançar o NEST. Falha (retorna `null`, com `push_error()` explicando o motivo) se:
+
+- SPAWN ou NEST não existem em quantidade exatamente 1 (checagem mínima e barata — não repete a
+  validação completa de `MapValidator`, que já deveria ter rodado antes);
+- o caminho é interrompido antes do NEST (nenhum vizinho válido);
+- existe **bifurcação** (mais de um vizinho válido não visitado em algum ponto);
+- sobra alguma célula PATH do mapa que nunca foi visitada pelo caminho de SPAWN a NEST
+  (segmento desconexo).
+
+**Loop e bifurcação são detectados pelo mesmo mecanismo.** Não existe um caminho separado de
+código para "loop": qualquer loop alcançável a partir do SPAWN necessariamente cria um ponto com
+mais de um vizinho válido em algum passo do trajeto (o ponto onde seria possível entrar no loop),
+então a checagem de bifurcação já rejeita os dois casos. Um contador de segurança
+(`max_steps = width*height + 1`) existe como rede adicional, mas não é o mecanismo primário —
+com a checagem de vizinho-único-não-visitado, o algoritmo não consegue de fato entrar em loop
+infinito (cada célula só pode ser visitada uma vez).
+
+**Por que não duplicar a validação geral do `MapValidator`:** `MapValidator` já garante
+dimensões, presença de SPAWN/NEST/PATH/EGG e conectividade genérica (BFS simples). Isso não
+garante que o PATH seja uma linha única sem ramificações — um mapa pode passar em
+`MapValidator` e ainda assim ser topologicamente inválido para produzir uma sequência
+determinística única (ex: um "Y" no caminho). `MapPath` assume que `MapValidator` já rodou, e
+adiciona só as checagens específicas de ordenação que `MapValidator` não faz.
+
+**Conversão para mundo não é feita aqui.** `MapPath` só conhece coordenadas de grid.
+`Grid.cell_center_world()` (já existente desde a Phase 0.1) é reutilizado por quem consome o
+path (`EnemySpawner`) para converter para posições de mundo — conversão centralizada num único
+lugar, não duplicada.
+
+### BasicEnemy e EnemySpawner
+
+**`BasicEnemy`** (`scripts/enemies/basic_enemy.gd`, `Node2D`) — inimigo placeholder mínimo:
+recebe uma lista de waypoints **em espaço de mundo** (não sabe nada sobre grid, `MapDefinition`
+ou `MapPath`) via `initialize(waypoints)`, e os percorre em ordem. `Node2D`, não
+`CharacterBody2D`: não há física nem colisão nesta fase, só interpolação de posição — física
+seria peso desnecessário para o que o inimigo faz hoje.
+
+- `speed: float` (`@export`, px/s) — **TBD/placeholder balance**, valor só para
+  visualização/teste (`60.0`), não é número de design final.
+- Movimento independente de FPS: `step(delta)` avança `speed * delta` px em direção ao próximo
+  waypoint; se `delta` cobrir mais de um waypoint no mesmo frame (velocidade alta), consome o
+  restante no mesmo `step()` em vez de esperar o próximo frame; ao alcançar um waypoint, a
+  posição é ajustada exatamente para ele (sem overshoot).
+- `step(delta)` é **lógica pura, pública, chamável fora de `_process`** — `_process(delta)` só
+  chama `step(delta)`. Isso existe especificamente para permitir testes determinísticos
+  (`game/tests/enemy_tests.gd`) sem depender de timing real de frame do motor.
+- Ao alcançar o último waypoint, emite `reached_nest(self)` e marca-se como terminado
+  (`is_finished()`). **Não se autodestrói** — outros sistemas futuros (dano ao ninho, contagem de
+  wave) podem precisar inspecionar o inimigo após a chegada; destruir preemptivamente removeria
+  essa informação sem necessidade.
+- Direção: `rotation` é ajustada para apontar para o waypoint atual a cada passo de movimento —
+  sem sistema de animação, só orientação básica, preparando para sprites direcionais futuros.
+
+Visual: `scenes/enemies/BasicEnemy.tscn` = `BasicEnemy` (script) + `Polygon2D` filho (triângulo
+laranja simples). **Placeholder explicitamente temporário** — substituível por
+`Sprite2D`/`AnimatedSprite2D` sem tocar em `basic_enemy.gd` (a lógica de movimento não sabe nada
+sobre a apresentação visual).
+
+**`EnemySpawner`** (`scripts/enemies/enemy_spawner.gd`, `Node`, não `Node2D` — sem identidade
+espacial própria, mesmo raciocínio de `InputManager`) — recebe `Grid` e `MapPath` já prontos via
+`setup()` (chamado por `Main`), e em `spawn_enemy()`: instancia `BasicEnemy` a partir de
+`enemy_scene` (`@export PackedScene`), converte os waypoints do `MapPath` (grid) para mundo via
+`Grid.cell_center_world()`, chama `initialize()`, e conecta ao próprio `reached_nest` do
+inimigo. Reemite como `enemy_reached_nest(enemy)` (sinal do próprio spawner) e loga — quem
+escuta esse evento hoje é só um `print()`; nenhum sistema (dano ao ninho, wave) existe ainda para
+consumi-lo de verdade.
+
+**Spawn desta fase é manual e único**, disparado por `Main._ready()` (`_enemy_spawner.setup(...)`
+seguido de `_enemy_spawner.spawn_enemy()`). Não existe wave manager, timer de spawn, nem múltiplos
+inimigos — fora de escopo da Phase 0.3.
 
 ### CellType: enum vs. Resource
 
@@ -307,6 +418,22 @@ apenas o `SceneTree` do próprio Godot em modo headless.
   SPAWN/NEST sem PATH adjacente; PATH descontínuo) e o mapa real `vale_dos_ovos.tres` (20×12,
   240 células, exatamente 3 EGG, 1 SPAWN, 1 NEST, presença de PATH/BUILDABLE/OBSTACLE, e
   `MapValidator.validate()` retornando zero erros).
+- `game/tests/path_tests.gd` (Phase 0.3) — `MapPath` contra o Vale dos Ovos real (constrói com
+  sucesso; início/fim corretos; 25 waypoints = 23 PATH + spawn + nest; todos os pares
+  consecutivos ortogonalmente adjacentes — sem diagonal, sem gap; sem duplicatas) e contra mapas
+  sintéticos inválidos (bifurcação; "loop"/anel; célula PATH solta) — todos devem ser rejeitados
+  (`build()` retorna `null`).
+- `game/tests/enemy_tests.gd` (Phase 0.3) — movimento puro de `BasicEnemy` via `step(delta)`
+  chamado diretamente (sem `_process`, sem depender de frame real): posição inicial correta,
+  índice de waypoint inicial, avanço para o próximo waypoint, chegada ao último waypoint com
+  `is_finished()`, emissão do sinal `reached_nest`, independência de FPS (mesmo resultado final
+  com um `step()` grande ou vários pequenos somando o mesmo tempo), e ausência de movimento após
+  terminado.
+- `game/tests/integration_tests.gd` (Phase 0.3) — instancia `Main.tscn` de verdade (o wiring de
+  produção completo) e confirma ponta a ponta: mapa carrega, `EnemySpawner` cria um `BasicEnemy`
+  real na posição de mundo do SPAWN, o inimigo consegue percorrer o caminho todo (avançado via
+  `step(delta)` determinístico, não frames reais) e chega à posição de mundo do NEST emitindo
+  `enemy_reached_nest` através do `EnemySpawner`.
 
 **Como executar (recomendado — inclui verificação de compilação, ver Phase 0.2.1):**
 
@@ -319,6 +446,9 @@ game/tests/run_tests.ps1
 ```
 godot --headless --path game --script res://tests/grid_tests.gd
 godot --headless --path game --script res://tests/map_tests.gd
+godot --headless --path game --script res://tests/path_tests.gd
+godot --headless --path game --script res://tests/enemy_tests.gd
+godot --headless --path game --script res://tests/integration_tests.gd
 ```
 
 Saída esperada em cada um: `ALL TESTS PASSED` e código de saída `0`; em caso de falha, cada
@@ -403,6 +533,65 @@ entre os dois; nenhuma mudança foi necessária nesses dois arquivos — o probl
 externo a eles (uma dependência falhando ao compilar), o que nenhuma lógica interna a um desses
 scripts poderia detectar sozinha. A correção tinha que vir de fora (`run_tests.ps1`).
 
+## Phase 0.3 — Path System + primeiro inimigo + movimento
+
+Duas novas limitações reais de Godot 4.7.2 foram descobertas ao rodar (não apenas inspecionar)
+os novos scripts/testes desta fase — ambas fizeram o `run_tests.ps1` do Phase 0.2.1 reportar
+falhas falsas ou testes travados até serem entendidas e corrigidas. Documentadas aqui porque não
+há como contornar sem rodar contra o binário real, e para não serem redescobertas do zero numa
+fase futura.
+
+### 1) O cache de `class_name` global não é atualizado por execução normal
+
+**Sintoma:** ao adicionar `MapPath`, `BasicEnemy` e `EnemySpawner` (três `class_name` novos),
+tanto `--check-only` quanto uma execução normal (`--quit-after 30`) passaram a reportar
+`Identifier not found: MapPath` / `Could not find type "BasicEnemy"` em scripts que referenciam
+essas classes — mesmo com o código sintaticamente correto (confirmado depois, sem nenhuma
+mudança de código).
+
+**Causa:** o Godot mantém um cache de classes `class_name` registradas globalmente
+(`.godot/global_script_class_cache.cfg`), populado por um **scan de projeto do editor**. Rodar
+`godot --headless --script X.gd` ou `--quit-after N` **não** dispara esse scan — só usa o cache
+que já existir. Um `class_name` recém-criado fica invisível para qualquer OUTRO script (mesmo em
+execução normal do jogo, não só em `--check-only`) até `--editor --quit` (ou abrir o projeto no
+editor de verdade) rodar pelo menos uma vez depois de o arquivo existir.
+
+**Confirmado empiricamente:** rodando `--editor --quit --path game`, a saída mostra
+explicitamente `update_scripts_classes | BasicEnemy`, `| EnemySpawner`, `| MapPath` sendo
+registrados; depois disso, a mesma execução normal que falhava passou a rodar sem nenhum erro.
+
+**Correção:** `game/tests/run_tests.ps1` agora roda `--editor --quit` como sua **Fase 1/3**,
+incondicionalmente, antes de qualquer compile-check ou teste — refresh de cache, não uma
+verificação (o exit code de `--editor --quit` não é usado para decidir sucesso/falha, só o
+efeito colateral de popular o cache importa). Isso significa: **sempre que um `class_name` novo
+for adicionado ao projeto, rodar `run_tests.ps1` (ou abrir o editor) pelo menos uma vez antes de
+rodar testes/builds isolados** — um `--check-only` isolado, sem esse refresh prévio, pode
+reportar um falso erro de "classe não encontrada" para uma classe perfeitamente válida.
+
+### 2) `_ready()` não é síncrono ao fazer `add_child()` em um script `SceneTree` customizado
+
+**Sintoma:** `game/tests/integration_tests.gd` instancia `Main.tscn` e faz `root.add_child(main)`
+esperando que isso dispare `_ready()` em cascata (GridManager constrói `grid`, Main constrói
+`MapPath` e spawna o inimigo) de forma síncrona, igual aconteceria numa cena normal. O teste
+verificava o resultado imediatamente após `add_child()` e sempre falhava: `GridManager.grid`
+continuava `null`, nenhum `BasicEnemy` era criado.
+
+**Causa, confirmada empiricamente com um script mínimo isolado:** ao rodar via um script que
+`extends SceneTree` (o modo `--script` que todos os testes deste projeto usam), a notificação
+`NOTIFICATION_READY` de nodes recém-adicionados a `root` **não é entregue de forma síncrona**
+dentro da chamada a `add_child()` — fica pendente até o próximo flush de chamadas adiadas do
+motor. Um `print()` logo após `add_child()` mostra `is_node_ready() == false`; o `_ready()` do
+node só de fato executa depois (impresso só ao final do script, após até `quit()` já ter sido
+chamado). Isso é diferente de como a cena principal (`run/main_scene`) é carregada pelo próprio
+bootstrapping do Godot, que já garante isso antes do primeiro frame real.
+
+**Correção:** `await process_frame` (sinal do próprio `SceneTree`) logo após `root.add_child(main)`
+em `integration_tests.gd` — esse é o idiom padrão do Godot para "aguarde o próximo flush de
+notificações/chamadas adiadas", não um hack: é uma sincronização de **um único passo
+determinístico**, não polling nem dependência de quantos frames algo "eventualmente" leva. O
+avanço de tempo do movimento em si continua 100% determinístico via `BasicEnemy.step(delta)`
+chamado diretamente pelo teste — nenhuma dependência de timing real de frame foi introduzida.
+
 ## Decisões técnicas adicionais desta fase
 
 - **Renderer:** `gl_compatibility` (Compatibility renderer), tanto para desktop quanto mobile
@@ -447,3 +636,41 @@ scripts poderia detectar sozinha. A correção tinha que vir de fora (`run_tests
   linhas. Se validação de mapa ganhar mais responsabilidade (ex: validação assíncrona, UI de
   erro), deve ser extraída para um componente próprio antes de crescer mais dentro de
   `GridManager`.
+
+## Decisões técnicas — Phase 0.3
+
+- **`MapPath` (não `PathDefinition`):** nomeado por analogia direta com `Grid` — ambos são dados
+  runtime **derivados** de um `MapDefinition` (não autorados diretamente), então usar o sufixo
+  `Definition` (reservado no projeto para dado estático/autoral, ver `MapDefinition`) induziria o
+  leitor a erro. `MapPath` deixa claro: "o [caminho] deste [mapa]", já calculado.
+- **`MapPath` é `RefCounted` com fábrica estática (`build()`), igual a `Grid`.** Não depende da
+  árvore de cena — testável isoladamente (`game/tests/path_tests.gd`). `build()` retorna `null` +
+  `push_error()` em vez de lançar exceção (GDScript não tem exceções) ou usar `assert()` — assim
+  quem consome (`Main.gd`) pode decidir o que fazer com um mapa mal formado sem derrubar o
+  processo.
+- **`BasicEnemy` é `Node2D`, não `CharacterBody2D`.** Não há física nem colisão nesta fase, só
+  interpolação de posição — `CharacterBody2D` adicionaria complexidade e custo (integração de
+  física) sem nenhum benefício ainda. Reavaliar quando/se colisão real for necessária.
+- **`EnemySpawner` é `Node`, não `Node2D`.** Mesmo raciocínio já aplicado a `InputManager`: o
+  spawner não tem posição/rotação próprias que importem — quem tem identidade espacial é o
+  `BasicEnemy` spawnado.
+- **`step(delta)` público e separado de `_process(delta)` em `BasicEnemy`.** `_process` só chama
+  `step()`. Isso existe especificamente para permitir avançar o movimento de forma determinística
+  em testes (chamando `step()` diretamente, com deltas controlados) sem depender de o node estar
+  numa `SceneTree` rodando nem de timing real de frame — usado tanto pelos testes de movimento
+  puro (`enemy_tests.gd`) quanto pelo teste de integração (`integration_tests.gd`).
+- **Detecção de bifurcação e de loop no `MapPath` usam o mesmo mecanismo** (ver seção
+  [MapPath](#mappath--path-following) acima) — não foi implementada lógica dedicada a "loop"
+  porque, dada a checagem de "siga o único vizinho válido não visitado", um loop alcançável a
+  partir do SPAWN sempre se manifesta como uma bifurcação em algum ponto do trajeto.
+- **Gotcha de closures do GDScript, descoberto escrevendo os testes:** uma função anônima
+  (`func(...): ...`) que reatribui uma variável local simples do escopo externo (ex:
+  `var received := false; sinal.connect(func(): received = true)`) **não** propaga essa mudança
+  para fora da lambda — GDScript captura variáveis locais simples por valor. `Array`/`Dictionary`
+  são capturados por referência ao mesmo objeto, então mutar um **elemento** deles (ex:
+  `var received := [false]; ... func(): received[0] = true`) funciona corretamente. Confirmado
+  com um script isolado contra Godot 4.7.2 antes de aplicar a correção nos testes afetados
+  (`enemy_tests.gd`, `integration_tests.gd`).
+- **`speed` em `BasicEnemy` é TBD/placeholder balance** (`60.0` px/s) — só para
+  visualização/teste nesta fase; não é um valor de design final, e não há sistema de
+  balanceamento ainda.

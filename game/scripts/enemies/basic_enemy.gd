@@ -7,12 +7,12 @@ extends Node2D
 ## Node2D, não CharacterBody2D: não há física nem colisão nesta fase, só
 ## interpolação de posição — Node2D é suficiente e mais leve.
 ##
-## Placeholder visual: Polygon2D (triângulo) dentro de `$Visual`
-## (AnimatedVisual), ver scenes/enemies/BasicEnemy.tscn. TEMPORÁRIO —
-## substituível por AnimatedSprite2D no futuro sem mudar este script (a
-## lógica de movimento não sabe nada sobre a apresentação visual, só chama
-## `_visual.play_state(...)`). `rotation` de direção (para onde o inimigo
-## está virado) continua sendo desta classe (no node raiz); a animação de
+## Visual: `AnimatedSprite2D` (pixel art, Primeiro Protótipo Visual) dentro
+## de `$Visual` (AnimatedVisual), ver scenes/enemies/BasicEnemy.tscn — este
+## script não sabe disso, só chama `_visual.play_state(...)`; se a arte for
+## trocada de novo no futuro (ou removida, voltando ao fallback procedural)
+## nenhuma linha aqui muda. `rotation` de direção (para onde o inimigo está
+## virado) continua sendo desta classe (no node raiz); a animação de
 ## MOVE/HIT mexe só em `$Visual` (filho), então as duas nunca competem pela
 ## mesma propriedade.
 ##
@@ -131,13 +131,22 @@ func _die() -> void:
 	_dead = true
 	died.emit(self)
 	if is_inside_tree():
-		_spawn_death_effect()
+		_spawn_death_effect(true)
 	queue_free()
 
 
-func _spawn_death_effect() -> void:
-	var effect := _DEATH_EFFECT_SCENE.instantiate() as Node2D
+## `with_creature_sprite`: quando true (só na morte de verdade, não na chegada ao ninho — ver
+## _advance_waypoint() abaixo), repassa o próprio SpriteFrames (se houver "death" nele) para o
+## DeathEffect mostrar a animação de morte desta criatura específica em vez do losango neutro
+## genérico. Lido direto do próprio $Visual/AnimatedSprite2D — não duplica a referência em
+## nenhum outro lugar.
+func _spawn_death_effect(with_creature_sprite: bool = false) -> void:
+	var effect := _DEATH_EFFECT_SCENE.instantiate() as DeathEffect
 	effect.global_position = global_position
+	if with_creature_sprite and _visual != null:
+		var sprite := _visual.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+		if sprite != null and sprite.sprite_frames != null:
+			effect.set_death_sprite_frames(sprite.sprite_frames)
 	get_parent().add_child(effect)
 
 

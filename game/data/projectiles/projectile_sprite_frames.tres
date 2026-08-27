@@ -1,0 +1,26 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/projectiles/idle_0.png" id="1_oixgx"]
+[ext_resource type="Texture2D" path="res://assets/projectiles/idle_1.png" id="2_0evwx"]
+[ext_resource type="Texture2D" path="res://assets/projectiles/idle_2.png" id="3_qgd8m"]
+[ext_resource type="Texture2D" path="res://assets/projectiles/idle_3.png" id="4_v1ary"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_oixgx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_0evwx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_qgd8m")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_v1ary")
+}],
+"loop": 1,
+"name": &"idle",
+"speed": 8.0
+}]

@@ -22,7 +22,6 @@ script = ExtResource("1")
 [node name="GridManager" type="Node2D" parent="."]
 script = ExtResource("2")
 map_definition = ExtResource("3")
-debug_visible = true
 
 [node name="InputManager" type="Node" parent="."]
 script = ExtResource("4")

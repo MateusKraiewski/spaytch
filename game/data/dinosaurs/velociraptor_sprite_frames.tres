@@ -1,0 +1,101 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/attack_0.png" id="1_qvvj7"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/attack_1.png" id="2_4oujc"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/attack_2.png" id="3_qyj85"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/attack_3.png" id="4_2t2fk"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/attack_4.png" id="5_kpi4e"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/attack_5.png" id="6_60xu0"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/hit_0.png" id="7_8oeg7"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/hit_1.png" id="8_uvh27"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/hit_2.png" id="9_tjy5v"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/idle_0.png" id="10_cms6v"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/idle_1.png" id="11_at2or"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/idle_2.png" id="12_et0r3"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/idle_3.png" id="13_h31i6"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/move_0.png" id="14_oeuiy"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/move_1.png" id="15_hgvt7"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/move_2.png" id="16_vi6n3"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/move_3.png" id="17_u74uq"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/move_4.png" id="18_ql1wq"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor/move_5.png" id="19_v3yko"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_qvvj7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_4oujc")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_qyj85")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_2t2fk")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_kpi4e")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_60xu0")
+}],
+"loop": 0,
+"name": &"attack",
+"speed": 14.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("7_8oeg7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_uvh27")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_tjy5v")
+}],
+"loop": 0,
+"name": &"hit",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("10_cms6v")
+}, {
+"duration": 1.0,
+"texture": ExtResource("11_at2or")
+}, {
+"duration": 1.0,
+"texture": ExtResource("12_et0r3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("13_h31i6")
+}],
+"loop": 1,
+"name": &"idle",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("14_oeuiy")
+}, {
+"duration": 1.0,
+"texture": ExtResource("15_hgvt7")
+}, {
+"duration": 1.0,
+"texture": ExtResource("16_vi6n3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("17_u74uq")
+}, {
+"duration": 1.0,
+"texture": ExtResource("18_ql1wq")
+}, {
+"duration": 1.0,
+"texture": ExtResource("19_v3yko")
+}],
+"loop": 1,
+"name": &"move",
+"speed": 10.0
+}]

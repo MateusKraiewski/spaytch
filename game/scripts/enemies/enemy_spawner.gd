@@ -25,12 +25,19 @@ extends Node
 ## inimigos quando existir um wave manager (fase futura já prevista), então
 ## isso não é escopo emprestado, é adiantar uma responsabilidade que já
 ## seria dele.
+##
+## Checkpoint E: spawn_enemy() também instancia um SpawnEffect (poeira subindo do chão) como
+## irmão do BasicEnemy recém-criado — mesmo padrão autônomo de DeathEffect (nunca bloqueia o
+## retorno de spawn_enemy(), se autodestrói sozinho). Puramente visual; não afeta HP/dano/path
+## following/sinais/nenhuma regra de gameplay.
 
 signal enemy_spawned(enemy: BasicEnemy)
 signal enemy_reached_nest(enemy: BasicEnemy)
 signal enemy_died(enemy: BasicEnemy)  ## Phase 0.5 — WaveManager/Economy escutam isto, não `BasicEnemy.died` diretamente
 
 @export var enemy_scene: PackedScene
+
+const _SPAWN_EFFECT_SCENE := preload("res://scenes/effects/SpawnEffect.tscn")
 
 var _grid: Grid
 var _map_path: MapPath
@@ -60,6 +67,19 @@ func spawn_enemy(speed_override: float = -1.0, hp_override: int = -1) -> BasicEn
 	enemy.died.connect(_on_enemy_died)
 	enemy.tree_exited.connect(_on_enemy_tree_exited.bind(enemy))
 	enemy.initialize(_world_waypoints())
+
+	# Checkpoint E — feedback visual de que algo acabou de nascer no SPAWN (antes disso, o inimigo
+	# só "aparecia" sem nenhum reconhecimento visual, diferente de impacto/morte/chegada ao ninho,
+	# que já tinham DeathEffect desde o Checkpoint D). Mesmo padrão de `BasicEnemy`/`Projectile`:
+	# autônomo, irmão da entidade (nunca filho — sobreviveria de qualquer forma, mas deixa claro
+	# que não pertence à entidade), nunca bloqueia spawn_enemy() nem sua chamadora. `is_inside_tree()`
+	# evita instanciar um node cujo `_ready()` nunca dispararia de qualquer forma (WaveManager/
+	# testes que usam um EnemySpawner solto via `.new()`, nunca adicionado a uma SceneTree real —
+	# ver wave_tests.gd) — mesmo raciocínio já usado por BasicEnemy/Projectile para DeathEffect.
+	if is_inside_tree():
+		var spawn_effect := _SPAWN_EFFECT_SCENE.instantiate() as SpawnEffect
+		spawn_effect.global_position = enemy.global_position
+		add_child(spawn_effect)
 
 	_active_enemies.append(enemy)
 	enemy_spawned.emit(enemy)

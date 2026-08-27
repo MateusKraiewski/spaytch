@@ -33,6 +33,14 @@ extends Node2D
 ## `add_child()`, sem nenhum `Visual` sequer existindo nesses casos — o
 ## chamador já checa `if _visual != null` antes de usar isto (ver
 ## BasicEnemy/Dinosaur/Egg/Projectile).
+##
+## Quando existe arte (Primeiro Protótipo Visual): ATTACK/HIT são animações
+## de UM tiro só no `AnimatedSprite2D` (`loop = false` no `SpriteFrames`) —
+## diferente do fallback procedural (onde IDLE/MOVE continuam rodando por
+## baixo, em trilha de Tween separada), aqui é uma única animação por vez.
+## Por isso `_on_sprite_reaction_finished()` volta sozinho para
+## `last_loop_state` ao final de uma reação — sem isso o sprite ficaria
+## congelado no último frame do ataque/hit para sempre.
 
 enum State { IDLE, MOVE, ATTACK, HIT, DEATH }
 
@@ -100,7 +108,7 @@ func play_state(state: State) -> void:
 
 	var anim_name: String = _STATE_NAMES[state]
 	if _sprite != null and _sprite.sprite_frames != null and _sprite.sprite_frames.has_animation(anim_name):
-		_sprite.play(anim_name)
+		_play_sprite(state, anim_name)
 		return
 
 	match state:
@@ -108,6 +116,32 @@ func play_state(state: State) -> void:
 			_play_loop(state)
 		State.ATTACK, State.HIT, State.DEATH:
 			_play_reaction(state)
+
+
+## Caminho de arte final: delega a animação para o AnimatedSprite2D em vez do fallback
+## procedural. IDLE/MOVE tocam em loop natural do próprio SpriteFrames (configurado como
+## `loop = true` no `.tres`) e não precisam de mais nada. ATTACK/HIT são configurados como
+## `loop = false` — tocam uma vez e, sem isto, ficariam congelados no último frame para sempre
+## (diferente do fallback procedural, onde IDLE/MOVE continuam rodando por baixo da reação em
+## trilhas de Tween independentes — aqui é UMA única animação por vez, não trilhas separadas).
+## Por isso: ao terminar uma animação de reação, volta sozinho para `last_loop_state`.
+func _play_sprite(state: State, anim_name: String) -> void:
+	if _sprite.animation_finished.is_connected(_on_sprite_reaction_finished):
+		_sprite.animation_finished.disconnect(_on_sprite_reaction_finished)
+
+	match state:
+		State.IDLE, State.MOVE:
+			last_loop_state = state
+			_sprite.play(anim_name)
+		State.ATTACK, State.HIT:
+			_sprite.play(anim_name)
+			_sprite.animation_finished.connect(_on_sprite_reaction_finished, CONNECT_ONE_SHOT)
+		State.DEATH:
+			_sprite.play(anim_name)
+
+
+func _on_sprite_reaction_finished() -> void:
+	play_state(last_loop_state)
 
 
 func _play_loop(state: State) -> void:

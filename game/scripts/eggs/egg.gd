@@ -7,18 +7,24 @@ extends Node2D
 ##
 ## Node2D (mesmo raciocínio de BasicEnemy/Dinosaur): posição própria +
 ## `$Visual` (AnimatedVisual) que reage ao dano/destruição. O ovo não se
-## move e não é removido da cena quando destruído (continua visível, só
-## visualmente "morto" — cinza) — por isso usa só HIT (flash + tingimento
-## permanente por fração de HP), nunca DEATH (que faz o node desaparecer,
-## errado para um ovo que deve continuar visível).
+## move e não é removido da cena quando destruído (continua visível, agora
+## com a casca quebrada de verdade — ver Checkpoint D em ARCHITECTURE.md).
 ##
 ## "Vivo" nunca fica estático: enquanto não destruído, mantém um loop
-## contínuo em `$Visual` — IDLE (respiração lenta) acima de
+## contínuo em `$Visual` — IDLE (respiração lenta, saudável) acima de
 ## `_CRITICAL_HP_FRACTION`, MOVE (mesmo loop, só mais rápido/agitado —
-## reaproveitado como "pulso de urgência", não literalmente "andando": o
-## nome do estado é interno a AnimatedVisual, o jogador nunca vê "MOVE")
-## abaixo dela. Ao ser destruído, o loop para (`stop_loop()`) — um ovo
-## destruído fica estático de propósito, não "morre" com uma animação.
+## reaproveitado como "pulso de urgência"/ferido, não literalmente
+## "andando": o nome do estado é interno a AnimatedVisual, o jogador nunca
+## vê "MOVE") abaixo dela.
+##
+## Ao ser destruído, toca DEATH uma vez (`loop = false` no SpriteFrames) —
+## diferente de BasicEnemy/Dinosaur (onde DEATH acompanha uma entidade que
+## está prestes a sumir/ser liberada), aqui a arte de "death" é desenhada
+## para ficar bem em pé, quebrada, PARA SEMPRE (a animação simplesmente
+## congela no último frame ao terminar — `AnimatedVisual` não reconecta
+## `animation_finished` para o estado DEATH, então nada a traz de volta ao
+## loop de "vivo"). Isso preserva a regra de gameplay de o ovo continuar
+## visível quando destruído sem precisar de nenhum mecanismo novo.
 
 signal damaged(egg: Egg, amount: int)
 signal destroyed(egg: Egg)
@@ -32,7 +38,6 @@ var coord: Vector2i = Vector2i.ZERO
 
 var _destroyed: bool = false
 
-const _DESTROYED_COLOR := Color(0.35, 0.35, 0.35, 0.6)
 const _CRITICAL_HP_FRACTION := 0.3
 const _DAMAGE_NUMBER_SCENE := preload("res://scenes/effects/DamageNumber.tscn")
 
@@ -70,25 +75,27 @@ func _spawn_damage_number(amount: int) -> void:
 	get_parent().add_child(number)
 
 
-## Além do tingimento permanente por fração de HP, um flash breve (estado
-## HIT de AnimatedVisual) marca o instante do dano/destruição — a cor de
-## repouso para onde HIT relaxa é sempre a tingida por HP (`set_base_modulate`
-## já aplica na hora, então mesmo sem tocar a animação o tom fica correto).
-## Também decide o loop de "vivo" (ver comentário de classe) e o desliga na
-## destruição. `_visual == null` cobre os testes que instanciam
-## Egg.new()/chamam initialize() sem add_child() — sem Visual, não há nada
-## para animar.
+## Decide QUAL animação toca: IDLE/MOVE enquanto vivo (por fração de HP, ver comentário de
+## classe), HIT como reação a um dano não-letal, DEATH uma vez só quando é o golpe que destrói
+## (nunca as duas coisas no mesmo golpe — HIT reverteria sozinho para o loop de "vivo" ao
+## terminar, desfazendo a casca quebrada). `_visual == null` cobre os testes que instanciam
+## Egg.new()/chamam initialize() sem add_child() — sem Visual, não há nada para animar.
+##
+## Não aplica mais tingimento por fração de HP (`set_base_modulate`, era como o protótipo
+## placeholder comunicava saudável/ferido/destruído só com cor, antes de existir arte real).
+## `modulate` MULTIPLICA a cor do sprite — um tom não-branco por cima da arte cuidadosamente
+## desenhada aqui (Checkpoint D) desbotaria/distorceria as cores reais em vez de só "tingir um
+## polígono monocromático" como antes (mesma categoria de decisão já tomada para
+## `Dinosaur.setup()`/`placeholder_color` no Checkpoint B). A diferença saudável/ferido/destruído
+## agora vem inteiramente da animação escolhida (idle/move/death), que já é bem mais expressiva
+## do que um gradiente de cor.
 func _update_visual() -> void:
-	var fraction := float(hp) / float(max_hp) if max_hp > 0 else 0.0
-	var target_color: Color = _DESTROYED_COLOR if _destroyed \
-		else Color(1.0, lerpf(0.3, 1.0, fraction), lerpf(0.3, 1.0, fraction))
-
 	if _visual == null:
 		return
-	_visual.set_base_modulate(target_color)
 	if _destroyed:
-		_visual.stop_loop()
+		_visual.play_state(AnimatedVisual.State.DEATH)
 	else:
+		var fraction := float(hp) / float(max_hp) if max_hp > 0 else 0.0
 		var loop_state := AnimatedVisual.State.MOVE if fraction <= _CRITICAL_HP_FRACTION else AnimatedVisual.State.IDLE
 		_visual.play_state(loop_state)
-	_visual.play_state(AnimatedVisual.State.HIT)
+		_visual.play_state(AnimatedVisual.State.HIT)

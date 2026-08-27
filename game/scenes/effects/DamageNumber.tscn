@@ -3,4 +3,5 @@
 [ext_resource type="Script" path="res://scripts/visuals/damage_number.gd" id="1"]
 
 [node name="DamageNumber" type="Node2D"]
+z_index = 15
 script = ExtResource("1")

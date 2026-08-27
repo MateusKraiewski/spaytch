@@ -12,11 +12,19 @@ extends Node2D
 ## `initialize()`); subir e desaparecer são só `position`/`modulate`
 ## (propriedades nativas do `CanvasItem`, animadas pelo motor sem precisar
 ## chamar `queue_redraw()` de novo).
+##
+## Checkpoint F: `z_index = 15` (ver DamageNumber.tscn) — mais alto que
+## personagens/DeathEffect/SpawnEffect (`z_index = 10`), para o número nunca
+## ficar escondido atrás de um raptor/inimigo grande ou de outro efeito
+## acontecendo no mesmo lugar. Contorno escuro (`draw_string_outline`) — sem
+## isso o amarelo claro perde contraste em cima de trilha/grama clara.
 
 const _LIFETIME := 0.6
 const _RISE_DISTANCE := 24.0
 const _FONT_SIZE := 16
 const _COLOR := Color(1.0, 0.85, 0.25)
+const _OUTLINE_COLOR := Color(0.15, 0.08, 0.02)
+const _OUTLINE_SIZE := 3
 
 var _text: String = ""
 
@@ -38,5 +46,7 @@ func _ready() -> void:
 
 
 func _draw() -> void:
+	draw_string_outline(ThemeDB.fallback_font, Vector2(-8, 0), _text,
+		HORIZONTAL_ALIGNMENT_CENTER, -1, _FONT_SIZE, _OUTLINE_SIZE, _OUTLINE_COLOR)
 	draw_string(ThemeDB.fallback_font, Vector2(-8, 0), _text,
 		HORIZONTAL_ALIGNMENT_CENTER, -1, _FONT_SIZE, _COLOR)

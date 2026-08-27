@@ -17,12 +17,14 @@ quando a arquitetura mudar de fato.
 > apresentação visual passou a ser desacoplada de gameplay via `AnimatedVisual`** (ver
 > [AnimatedVisual e DeathEffect](#animatedvisual-e-deatheffect-phase-06)): cada entidade
 > (`Dinosaur`/`BasicEnemy`/`Egg`/`Projectile`) reage a 5 estados padronizados
-> (IDLE/MOVE/ATTACK/HIT/DEATH) através de um componente único, realizado hoje via `Tween`
-> procedural (sem arte final) e pronto para um `AnimatedSprite2D` real no futuro sem mudar código
-> de gameplay; morte/chegada ao ninho/impacto ganharam um efeito visual desacoplado
-> (`DeathEffect`) que nunca atrasa a remoção real da entidade. O placeholder do Dinosaur trocou de
-> um triângulo simples para uma silhueta de 6 pontos, com `DinosaurDefinition.placeholder_color`
-> agora realmente aplicado (era um campo preparado mas não usado desde a Phase 0.4). Sem economia
+> (IDLE/MOVE/ATTACK/HIT/DEATH) através de um componente único; morte/chegada ao ninho/impacto
+> ganharam um efeito visual desacoplado (`DeathEffect`) que nunca atrasa a remoção real da
+> entidade. **Primeiro Protótipo Visual (pixel art 16-bit original, ver
+> [seção dedicada](#primeiro-protótipo-visual) e `docs/ART_DIRECTION.md`):** Velociraptor e
+> `BasicEnemy` têm sprites/animações reais próprias (`AnimatedSprite2D`, silhuetas distintas entre
+> si) pela primeira vez, mais 6 tiles de ambiente (grama/trilha/borda/arbusto/árvore/pedra)
+> desenhando a grid do Vale dos Ovos — `Egg`/`Projectile` continuam com o fallback procedural
+> (`Tween` sobre forma primitiva), fora do escopo desta rodada. Sem economia
 > premium, loja, login real, persistência, novos dinossauros/inimigos, upgrades ou multiplayer.
 > Seções abaixo descrevem o que existe de fato; o que ainda não existe permanece `TBD`.
 
@@ -152,13 +154,36 @@ game/
 │   ├── test/
 │   │   └── test_map.tres       # fixture de teste (Phase 0.1) — não é mais mapa jogável
 │   ├── dinosaurs/
-│   │   └── velociraptor.tres   # único DinosaurDefinition desta fase
+│   │   ├── velociraptor.tres              # único DinosaurDefinition desta fase
+│   │   └── velociraptor_sprite_frames.tres  # Checkpoint B — idle/move/attack/hit (19 frames)
+│   ├── enemies/
+│   │   └── basic_enemy_sprite_frames.tres   # Checkpoint C — move/hit/death (15 frames)
+	├── eggs/egg_sprite_frames.tres          # Checkpoint D — idle/move/hit/death (16 frames)
+	├── projectiles/projectile_sprite_frames.tres  # Checkpoint D — idle (único estado usado)
+	├── effects/impact_sprite_frames.tres    # Checkpoint D — arte padrão do DeathEffect (4 frames)
+	├── effects/spawn_sprite_frames.tres     # Checkpoint E — arte do SpawnEffect (4 frames)
 │   └── waves/
 │       ├── wave_01.tres        # 5 inimigos, intervalo 1.0s
 │       ├── wave_02.tres        # 8 inimigos, intervalo 0.9s
 │       └── wave_03.tres        # 10 inimigos, intervalo 0.8s, hp_override 25
-├── assets/                     # vazio nesta fase (sem arte final ainda)
+├── assets/                     # Primeiro Protótipo Visual — PNGs pixel art (ver seção dedicada)
+│   ├── environment/             # checkpoint Ambiente — 26 PNGs: grass_01-04/path_01-03 (32×32),
+│   │                            # path_edge_n/s/e/w (32×10 ou 10×32), bush/tree/rock small+large,
+│   │                            # rock_cluster, stump, flower_yellow/pink, mushroom, leaf, twig,
+│   │                            # root_detail, grass_tuft (32×32)
+│   ├── dinosaurs/velociraptor/  # Checkpoint B — 19 PNGs 48×48: idle_0-3, move_0-5, attack_0-5,
+│   │                            # hit_0-2
+│   ├── enemies/basic_enemy/     # Checkpoint C — 15 PNGs 48×48: move_0-5, hit_0-2, death_0-5
+│   ├── eggs/                    # Checkpoint D — 16 PNGs 32×32: idle_0-3, move_0-3, hit_0-2, death_0-4
+│   ├── projectiles/             # Checkpoint D — 4 PNGs 20×16 (não quadrado): idle_0-3
+│   ├── effects/                 # Checkpoint D+E — impact_0-3 e spawn_0-3 (24×24, arte padrão de
+	│                             # DeathEffect/SpawnEffect); DamageNumber continua procedural
+│   └── ui/                      # reservado — HUD/MainMenu continuam Label/Button padrão
 ├── ui/                         # vazio — HUD.tscn vive em scenes/ui/, não aqui (ver Cenas)
+├── tools/                      # Primeiro Protótipo Visual — pipeline de arte, NÃO faz parte do jogo em runtime
+│   ├── pixel_art_generator.gd   # desenha e salva os PNGs de assets/ (Image.set_pixel())
+│   ├── build_sprite_frames.gd   # monta os .tres de SpriteFrames a partir dos PNGs já importados
+│   └── preview_contact_sheet.gd # ferramenta de revisão — amplia os PNGs numa folha de contato única
 └── tests/
     ├── grid_tests.gd                  # testes headless da lógica pura de Grid/MapDefinition
     ├── map_tests.gd                   # testes headless de MapValidator + do mapa Vale dos Ovos
@@ -177,6 +202,7 @@ game/
     ├── game_loop_integration_tests.gd # Main.tscn real: loop completo + cenário de dano ao ovo
     ├── ux_tests.gd                    # Phase 0.6: MainMenu carrega, API pública da HUD, pausa/resume/menu e banners de wave via Main.tscn real
     ├── animated_visual_tests.gd       # Phase 0.6: AnimatedVisual — fallback procedural, set_base_modulate, delegação p/ AnimatedSprite2D
+    ├── visual_prototype_tests.gd      # Primeiro Protótipo Visual: Dinosaur/BasicEnemy usam o AnimatedSprite2D de verdade, reação volta ao loop, DeathEffect recebe sprite da criatura
     └── run_tests.ps1                  # orquestra refresh de cache + compile-check + testes
 ```
 
@@ -190,10 +216,10 @@ em `scripts/`, seguindo convenção comum e atendendo ao requisito de testes da 
 
 ## Cenas (Scenes)
 
-Nove cenas existem: `scenes/MainMenu.tscn` (Phase 0.6), `scenes/Main.tscn`,
+Dez cenas existem: `scenes/MainMenu.tscn` (Phase 0.6), `scenes/Main.tscn`,
 `scenes/enemies/BasicEnemy.tscn`, `scenes/dinosaurs/Dinosaur.tscn`, `scenes/combat/Projectile.tscn`,
-`scenes/eggs/Egg.tscn`, `scenes/effects/DeathEffect.tscn`, `scenes/effects/DamageNumber.tscn` e
-`scenes/ui/HUD.tscn`.
+`scenes/eggs/Egg.tscn`, `scenes/effects/DeathEffect.tscn`, `scenes/effects/SpawnEffect.tscn`
+(Checkpoint E — ver seção dedicada), `scenes/effects/DamageNumber.tscn` e `scenes/ui/HUD.tscn`.
 
 `scenes/MainMenu.tscn` — cena de boot do projeto (`project.godot` `run/main_scene`), sem nenhuma
 dependência da cena de jogo:
@@ -313,9 +339,9 @@ respondendo mesmo com `get_tree().paused = true`, ver [Pausa](#pausa-e-velocidad
 HUD (CanvasLayer, hud.gd, process_mode = ALWAYS)
 └── Root (Control, tela cheia, mouse_filter = IGNORE)
     ├── EggsLabel / CoinsLabel / WaveLabel / WaveStateLabel (Label, canto superior-esquerdo)
-    ├── PauseButton / SpeedButton (Button, canto superior-direito)
-    ├── DinosaurButton (Button, inferior-esquerdo — reseleciona o Velociraptor)
-    ├── StartWaveButton (Button, inferior-direito)
+    ├── DinosaurButton / PauseButton / SpeedButton / StartWaveButton (Button, fileira única no
+    │   rodapé — Checkpoint F: PauseButton/SpeedButton moveram do canto superior-direito, onde
+    │   sobrepunham células EGG do mapa real; ver seção do Checkpoint F)
     ├── BannerLabel (Label, centro, oculto por padrão — "WAVE N", "WAVE N COMPLETE!
     │   +recompensa", "Coins insuficientes!"; ver show_banner()/hide_banner())
     ├── PauseOverlay (Panel, oculto por padrão, bloqueia clique quando visível)
@@ -1209,6 +1235,7 @@ godot --headless --path game --script res://tests/wave_tests.gd
 godot --headless --path game --script res://tests/game_loop_integration_tests.gd
 godot --headless --path game --script res://tests/ux_tests.gd
 godot --headless --path game --script res://tests/animated_visual_tests.gd
+godot --headless --path game --script res://tests/visual_prototype_tests.gd
 ```
 
 Saída esperada em cada um: `ALL TESTS PASSED` e código de saída `0`; em caso de falha, cada
@@ -1796,3 +1823,537 @@ reais:
   nenhuma mudança de código foi necessária além do já existente (tamanhos de botão, contraste de
   grid, ausência de dependência de hover, HUD não cobrindo o mapa já atendiam ao critério). Ver
   relatório da sessão para o detalhamento ponto a ponto.
+
+## Primeiro Protótipo Visual
+
+Primeira arte real do jogo (pixel art 16-bit, identidade original — ver `docs/ART_DIRECTION.md`
+para a direção completa), substituindo os placeholders geométricos (`Polygon2D`) do Velociraptor,
+do `BasicEnemy` e do chão da grid. Sem nova numeração de fase — extensão do sistema visual já
+existente (`AnimatedVisual`), não uma reescrita.
+
+### Pipeline de arte (`game/tools/`)
+
+O projeto não tinha nenhum pipeline de arte antes desta etapa. Três scripts, executados
+manualmente (não fazem parte do jogo em runtime, nenhuma cena os referencia):
+
+- **`pixel_art_generator.gd`** — desenha os PNGs (ambiente + frames do Velociraptor + frames do
+  `BasicEnemy`) programaticamente via `Image.set_pixel()`, compondo formas primitivas
+  (elipses/retângulos/polígonos com preenchimento por scanline) — sem nenhuma dependência externa.
+  Salva em `game/assets/`. Também expõe 3 helpers de transformação pixel-a-pixel usados para
+  derivar variações a partir de uma única arte-fonte já validada, em vez de desenhar cada
+  orientação à mão: `_flip_y()`, `_flip_x()`, `_transpose()` (troca linhas por colunas). Usado no
+  checkpoint de Ambiente para gerar as 4 tiras de transição grama↔trilha a partir de uma só (ver
+  `GridManager` abaixo).
+- **`build_sprite_frames.gd`** — carrega os PNGs já importados pelo editor e monta os `.tres` de
+  `SpriteFrames` (`game/data/dinosaurs/velociraptor_sprite_frames.tres`,
+  `game/data/enemies/basic_enemy_sprite_frames.tres`) com animações nomeadas exatamente como
+  `AnimatedVisual.State` (`"idle"`, `"attack"`, `"move"`, `"hit"`, `"death"`). Precisa rodar
+  **depois** de um `--editor --quit` (o `load()` de uma textura recém-criada exige o `.import`
+  que só o editor gera — mesma categoria de gotcha já documentada para o cache de `class_name`).
+- **`preview_contact_sheet.gd`** — ferramenta de revisão: amplia (nearest-neighbor) todos os PNGs
+  e monta uma folha de contato única, só para inspeção visual durante o desenvolvimento; nunca
+  referenciada por nenhuma cena, sem saída commitada (regenerável a qualquer momento). Redimensiona
+  preservando a proporção original de cada fonte (em vez de forçar um quadrado) — necessário desde
+  que as tiras de borda passaram a ser retangulares (32×10 / 10×32), não só quadradas 32×32.
+
+Fluxo completo para regenerar/ajustar a arte: `pixel_art_generator.gd` →
+`godot --headless --editor --quit` (importa os PNGs novos) → `build_sprite_frames.gd`. Documentado
+aqui porque é o pipeline mínimo real do projeto agora — substituível por um artista/Aseprite
+depois sem mudar como o jogo consome os assets (PNG + `SpriteFrames`, ver
+[Animações](#animações) em `ART_DIRECTION.md`).
+
+**Bug real encontrado durante a criação da arte (Velociraptor/BasicEnemy):** o primeiro desenho do
+focinho do Velociraptor ia até x=33 num canvas de 32px — cortado pela borda no frame de ataque
+(lunge de `dx=+2`), fazendo `idle`/`attack` parecerem visualmente idênticos apesar de terem código
+diferente. Corrigido recentrando a composição com folga nas duas direções. Encontrado inspecionando
+os PNGs gerados via a ferramenta `Read` (leitura de imagem) — não por execução do jogo.
+
+**Lição reforçada no checkpoint de Ambiente — miniatura de pixel art pode enganar até inspeção
+cuidadosa:** ao ajustar a proporção grama/trilha da tira de borda norte (formula original ~60–70%
+grama), a correção parecia visualmente "ainda desbalanceada" na folha de contato ampliada, mesmo
+depois de mudar o cálculo. Em vez de confiar nessa leitura visual (mesma armadilha do bug do
+focinho acima), foi escrito um script descartável (`diff_check.gd`, removido depois de usado, não
+faz parte do projeto) que conta pixels dominantes de cada cor por imagem — confirmou que a correção
+estava de fato certa (~45% grama / 55% trilha, consistente nas 4 direções depois de transpor) e que
+a percepção visual da miniatura pequena é que não era confiável. Padrão a repetir: para qualquer
+proporção/diferença que precise ser exata, escrever uma medição objetiva em vez de só olhar.
+
+### Integração — `Dinosaur.tscn` / `BasicEnemy.tscn`
+
+Ambas as cenas ganharam um node `AnimatedSprite2D` (nome exato — é assim que
+`AnimatedVisual.get_node_or_null("AnimatedSprite2D")` o encontra) dentro de `$Visual`, com
+`sprite_frames` apontando para o `.tres` correspondente. O `Placeholder` (`Polygon2D`) foi
+**removido** dessas duas cenas — cobria exatamente os mesmos estados que a arte nova cobre
+(Dinosaur: IDLE/ATTACK; BasicEnemy: MOVE/HIT/DEATH), então o fallback procedural nunca seria
+acionado para elas de qualquer forma. `Egg`/`Projectile` **não** mudaram — continuam com
+`Polygon2D`, fora do escopo desta etapa (só Velociraptor e BasicEnemy foram pedidos).
+
+### `AnimatedVisual` — reação sprite-driven precisa voltar sozinha ao loop
+
+Gap real de arquitetura descoberto ao ligar a arte: no fallback procedural, IDLE/MOVE continuam
+tocando **por baixo** de uma reação (ATTACK/HIT), porque são trilhas de `Tween` independentes
+(`_loop_tween` vs. `_reaction_tween`, mexendo em propriedades diferentes). Com
+`AnimatedSprite2D`, é **uma única** animação por vez — sem nenhum tratamento adicional, tocar
+`"attack"`/`"hit"` (configuradas com `loop = false` no `SpriteFrames`) deixaria o sprite
+congelado no último frame para sempre, já que nada re-dispara `"idle"`/`"move"` depois.
+
+Corrigido com `_play_sprite()` + `_on_sprite_reaction_finished()`: ao tocar uma reação
+sprite-driven, conecta (`CONNECT_ONE_SHOT`) o sinal `AnimatedSprite2D.animation_finished`, que ao
+disparar chama `play_state(last_loop_state)` — volta sozinho para o loop que estava tocando antes
+(`last_loop_state`, já existente desde o reforço pós Phase 0.6). API pública (`play_state`)
+inalterada; gameplay continua sem saber que isso existe.
+
+### `DeathEffect` — passthrough opcional do sprite da criatura
+
+`DeathEffect` ganhou `set_death_sprite_frames(frames: SpriteFrames)` (opcional, chamado ANTES de
+`add_child()`) e um `AnimatedSprite2D` filho (vazio por padrão). Sem chamar isso — caso padrão:
+impacto de projétil, chegada ao ninho — o efeito continua mostrando o losango neutro genérico
+(`Polygon2D`) de sempre. `BasicEnemy._die()` (só a morte de verdade, não a chegada ao ninho) passa
+o próprio `SpriteFrames` (lido direto de `$Visual/AnimatedSprite2D`, sem duplicar a referência em
+nenhum outro lugar) — o efeito de morte passa a mostrar os frames de `"death"` daquela criatura
+específica em vez do genérico. `Placeholder` do `DeathEffect` é escondido (`visible = false`)
+quando isso acontece, para as duas artes não desenharem sobrepostas.
+
+**Bug real encontrado por `run_tests.ps1`:** a primeira versão de `set_death_sprite_frames()`
+acessava o `AnimatedSprite2D` via `_visual.get_node_or_null(...)` (o campo `@onready` de
+`DeathEffect`) — `SCRIPT ERROR: Cannot call method 'get_node_or_null' on a null value`, porque
+esse método roda **antes** de `add_child()`, ou seja, antes do `_ready()` de `DeathEffect` (que
+resolve `_visual`) sequer disparar. Corrigido navegando a partir de `self`
+(`get_node_or_null("Visual/AnimatedSprite2D")`) — a estrutura da cena já instanciada existe assim
+que `instantiate()` roda, um campo `@onready` cacheado não.
+
+### `GridManager` — chão e decoração da grid
+
+`debug_visible` **inverteu de sentido** (`@export var debug_visible: bool = false`, era `true`):
+antes era a única forma de ver a grid (não havia arte); agora é o oposto — por padrão desenha os
+tiles de `assets/environment/`, e F3 troca para o preenchimento plano de `DEBUG_COLORS` de sempre
+(mantido como auxílio de desenvolvimento, não removido). Nenhuma lógica de grid mudou —
+`Grid`/`Cell`/`MapDefinition`/`MapValidator` continuam exatamente como eram; isto é só uma segunda
+forma de **desenhar** o mesmo dado (`_draw_cell_art()`, chamado em vez do preenchimento de debug).
+
+- PATH/SPAWN/NEST desenham a base de trilha; todo o resto desenha grama. Cada uma escolhe entre
+  variações (4 de grama, 3 de trilha — `grass_01..04.png`, `path_01..03.png`) via `_pick()`, um
+  hash determinístico por coordenada (`absi(coord.x*mult_x + coord.y*mult_y) % textures.size()`,
+  multiplicadores diferentes por lista para não repetir o mesmo índice relativo entre grama/
+  trilha/decoração) — nunca `RandomNumberGenerator`, o mesmo mapa sempre desenha exatamente igual
+  entre execuções. As variações usam a mesma linguagem visual (mesma paleta, mesmo nível de
+  detalhe, só desloca o padrão de tufos/pedrinhas e no máximo acrescenta um elemento pequeno como
+  uma flor ou uma pedra extra) — o objetivo é impedir repetição óbvia célula-a-célula sem o mapa
+  parecer ter biomas diferentes.
+- OBSTACLE desenha grama + uma decoração escolhida pelo mesmo `_pick()` dentre 6 opções
+  (`rock_large`, `tree_large`, `bush_large`, `rock_cluster`, `tree_small`, `stump` — antes eram só
+  3, ver `_OBSTACLE_DECORATIONS`). Nunca em BUILDABLE — vegetação decorativa não pode competir com
+  a leitura de "aqui dá para construir" (regra explícita de `docs/ART_DIRECTION.md`).
+- SPAWN/NEST/EGG ganham um tingimento translúcido por cima da textura base (`Color(cor_debug,
+  alpha)`), preservando a distinção de cor já estabelecida sem precisar de tile próprio.
+- Transição grama↔trilha agora cobre as **4 direções cardeais**, resolvendo a limitação conhecida
+  da versão anterior (só norte/sul). Em vez de rotacionar uma textura em runtime
+  (`draw_set_transform`, descartado por não dar para validar visualmente), o checkpoint de
+  Ambiente desenha à mão só a tira norte (`path_edge_n.png`, "grama em cima, trilha embaixo") e
+  deriva as outras 3 por transformação de pixels no próprio gerador — `path_edge_s =
+  flip_y(edge_n)`, `path_edge_w = transpose(edge_n)`, `path_edge_e = flip_x(edge_w)` — garantindo
+  consistência matemática entre as 4 sem depender de rotação em runtime; `_draw_path_edges()`
+  desenha cada uma com `draw_texture_rect()` simples num `Rect2` posicionado na borda
+  correspondente da célula. Sem asset dedicado para cantos (permitido explicitamente pelo escopo
+  do checkpoint) — quando dois lados adjacentes de uma célula precisam de transição, as duas tiras
+  são desenhadas sobrepostas, o que já cobre a leitura sem exigir um quarto conjunto de assets
+  diagonais.
+
+### Checkpoint B — Velociraptor (asset pack)
+
+Redesenho completo do Velociraptor pedido pelo usuário depois do Checkpoint A aprovado: 19 frames
+reais substituindo os 4 do protótipo anterior (IDLE 4, MOVE 6, ATTACK 6, HIT 3; MOVE/HIT
+preparados para reutilização futura, `Dinosaur.gd` não os chama hoje). **Paleta laranja
+(`#F28D26`) mantida** — a mesma identidade estabelecida desde a Phase 0.4, não uma cor nova; a
+imagem de referência do asset pack (que mostra um raptor verde) foi usada só como direção de
+silhueta/proporções/linguagem de pixel art, nunca como paleta a copiar. (Nota histórica: uma
+iteração intermediária desta mesma etapa chegou a migrar a paleta para verde por instrução do
+usuário; o usuário revisou logo em seguida e pediu para manter o laranja — o código e esta seção
+já refletem só a decisão final.)
+
+- **Canvas 48×48** (era 32×32) — permitido explicitamente pela instrução do checkpoint para dar
+  folga real a poses dinâmicas de corrida/mordida/lunge sem recortar; ainda lê como "uma torre
+  numa célula" (1.5× o lado do tile de 32px), não várias.
+- **Geração por pose, não por parâmetro solto:** `_raptor_pose(overrides: Dictionary)` retorna uma
+  pose neutra completa (postura parada, respirando) e cada um dos 19 frames só sobrescreve os
+  campos que mudam naquele frame (`body_dx`/`body_dy` de lean-lunge, `head_tilt`, `mouth_open`,
+  `chest_scale` de respiração, pontos de controle da cauda, joelho/pé de cada perna, offset do
+  braço, `eye_shut`). Evita 19 chamadas com uma dúzia de parâmetros posicionais cada — cada pose
+  lê como uma lista do que muda, não uma tabela de números soltos.
+- **`_fill_thick_line()`** (novo helper) — segmento reto grosso entre dois pontos via polígono
+  perpendicular à direção; usado para pernas (2 segmentos: coxa+canela, joelho visivelmente
+  dobrado), cauda (2 segmentos, afinando) e braço. Deixa qualquer membro apontar em qualquer
+  ângulo sem rotacionar a imagem inteira — rotacionar o sprite completo foi explicitamente excluído
+  como "animação de verdade" pela instrução do checkpoint.
+- **Mandíbula com dobradiça real** (`jaw_hinge`/`upper_tip`/`lower_tip`): maxilar superior e
+  mandíbula inferior são duas peças que se separam a partir de um ponto comum, a mandíbula inferior
+  descendo proporcionalmente a `mouth_open` — não um recorte cosmético.
+
+**2 bugs reais encontrados e corrigidos nesta etapa** (ambos via inspeção de imagem ampliada, não
+só a folha de contato em miniatura — mesma lição já registrada duas vezes antes: miniatura pequena
+engana):
+1. Canvas 40×40 inicial + cabeça perto o bastante da borda direita: nos frames de lunge do
+   ATTACK, `body_dx` positivo somado ao deslocamento do focinho jogava a boca inteira para fora do
+   canvas — `_set_px()` descarta pixel fora dos limites silenciosamente, sem erro, só uma boca que
+   nunca aparecia. Corrigido alargando para 48×48 e recentrando as âncoras (`_R_HIP`,
+   `_R_BODY_CENTER`, `_R_HEAD`, `_R_TAIL_BASE`) com folga real.
+2. Mesmo depois de caber no canvas, o polígono do interior da boca aberta era pequeno demais
+   (< 2px de área) para ler como "boca aberta" em qualquer frame, mesmo no de mordida máxima.
+   Corrigido trocando o desenho por uma dobradiça real (acima) — a mandíbula inferior agora desce
+   até 6px a mais que a superior no pico do ataque, uma separação clara em vez de uma fresta.
+
+**Decisão de dado, não de arquitetura:** `game/data/dinosaurs/velociraptor.tres` tinha
+`placeholder_color = Color(0.95, 0.55, 0.15, 1)` (o mesmo laranja, só que como tingimento de
+placeholder) — `Dinosaur.setup()` aplica esse valor via `_visual.set_base_modulate()`, que
+multiplica (`modulate`) por cima do `AnimatedSprite2D`. Com arte real, qualquer `modulate`
+diferente de branco distorce as cores desenhadas à mão (mesmo sendo a mesma família de cor,
+multiplicar laranja por laranja não reproduz o mesmo laranja). Corrigido para
+`Color(1, 1, 1, 1)` (branco = modulate neutro, não altera a arte) — o campo continua existindo e
+documentado como "reservado para uso futuro" em `dinosaur_definition.gd`, só não é mais usado para
+tingir a arte real.
+
+**Desacoplamento necessário:** `_draw_enemy()` (BasicEnemy, não tocado nesta etapa) reaproveitava
+a constante `_RAPTOR_LIGHT` como cor de flash de dano. Como o Checkpoint B reestruturou por
+completo a geração do Velociraptor (chegando a variar seus valores numa iteração intermediária),
+`_draw_enemy()` não deveria depender de uma constante que pertence a outra criatura só porque os
+valores coincidiam. Extraído para `_ENEMY_FLASH` (mesmo valor RGB de antes — visual do BasicEnemy
+fica pixel-a-pixel igual), só desacoplado por nome.
+
+### Checkpoint C — BasicEnemy (asset pack)
+
+Redesenho completo do BasicEnemy com 15 frames reais (era 6 no protótipo anterior). Paleta mantida
+(`#F35A1A`, vermelho-terroso, já estabelecida desde a Phase 0.4) — a diferenciação em relação ao
+Velociraptor pedida pelo usuário vem de **plano corporal e postura**, não de recolor:
+
+- Quadrúpede (4 pernas em estrutura — nunca braços, diferente do biped Velociraptor com 2 pernas +
+  2 braços pequenos), corpo baixo e largo (o raptor é esguio e alto), cauda curta arrastando perto
+  do chão (o raptor tem cauda longa erguida para equilíbrio — oposto deliberado), cabeça larga e
+  romba com chifre pequeno (o raptor tem focinho afunilado com crista), crista de espinhos nas
+  costas (mantida do protótipo anterior — já era um bom marcador de identidade).
+- **Canvas 48×48** (era 32×32) — mesmo raciocínio do Checkpoint B: folga real para poses sem
+  recortar.
+- Mesma técnica de geração por pose (`_enemy_pose(overrides)`) e membros via `_fill_thick_line()`
+  do Checkpoint B, mas pernas de **1 segmento só** (`_draw_enemy_leg()`, sem joelho articulado como
+  a perna de 2 segmentos do raptor) — reforça a postura mais bruta/pesada do invasor por design,
+  não só simplicidade de código.
+- **MOVE (6 frames):** trote real — pares diagonais de pernas alternam apoio, corpo balança
+  verticalmente com o passo, cauda baixa balança lateralmente.
+- **HIT (3 frames):** recuo do corpo inteiro + achatamento de impacto + focinho abre num resmungo
+  de dor — reação física real, não só um flash de cor por cima da pose parada (o flash de cor
+  ainda existe, mas como complemento, nunca substituto).
+- **DEATH (6 frames):** colapso real — pernas cedem (pés se espalham), corpo afunda e achata,
+  crista deita (`spike_lift` 1→0.05), cauda cai no chão, olho fecha. `death` roda a 15fps (6
+  frames × 1/15s = 0.4s) para caber exatamente em `DeathEffect._LIFETIME` (constante fixa,
+  não alterada nesta etapa) — mesma relação já usada na versão de 2 frames anterior (5fps × 2 =
+  0.4s); sem isso o efeito seria destruído por timer antes da animação de morte terminar de tocar.
+
+**2 bugs reais encontrados e corrigidos nesta etapa** (o segundo só ficou óbvio na folha de
+contato ampliada, não nos números isolados):
+1. Erro de tipagem: `body_ry := 6.5 / pose.flatten` (então chamado `squash`) não compila —
+   GDScript não infere o tipo de uma divisão sobre um valor `Variant` vindo de acesso a
+   `Dictionary` com `:=`. Corrigido lendo o campo para uma `var flatten: float` tipada antes de
+   usar em qualquer expressão aritmética atribuída com `:=` (mesma categoria de gotcha do array
+   literal sem tipo, já documentada várias vezes neste arquivo).
+2. **Fórmula do achatamento invertida:** a primeira versão usava `body_ry = 6.5 / squash` — com
+   `squash < 1.0` (usado nos frames de morte), isso faz a ALTURA CRESCER e a LARGURA DIMINUIR
+   conforme o valor cai, o oposto do que "achatar/colapsar" deveria fazer. O inimigo "morrendo"
+   ficava mais alto e fino — parecia em pé, quase de cabeça para baixo, em vez de tombar achatado
+   no chão. Corrigido renomeando o campo para `flatten` com semântica direta (`1.0` = normal,
+   menor = mais baixo E mais largo): `body_ry = 6.5 * flatten`, `body_rx = 10.5 + (1.0 - flatten)
+   * 6.0` — as duas dimensões respondem na mesma direção. Esse mesmo ajuste também corrigiu um
+   problema latente no HIT (a versão antiga usava `squash > 1.0` para o impacto, que sob a fórmula
+   invertida na verdade ficava MENOS achatado, contra a intuição de "squash de impacto").
+
+### Checkpoint D — Ovos + Projéteis (asset pack)
+
+Redesenho completo de `Egg` e `Projectile`, mais a primeira arte real de `DeathEffect` (era só um
+losango procedural genérico). Paleta creme/palha para o ovo (tema pré-histórico, tom natural —
+nunca branco genérico) e reaproveitamento da paleta do Velociraptor no projétil (é o que a torre
+dispara — coerência visual entre quem atira e o que é disparado).
+
+**D1 — Ovo (`assets/eggs/`, 16 frames):** silhueta composta por 2 elipses sobrepostas (base larga
++ topo estreito, não um círculo/oval genérico). 3 aparências discretas, mapeadas nos MESMOS
+estados que `egg.gd` já decidia por fração de HP — nenhum estado novo:
+- **IDLE = saudável** (4 frames): respiração lenta e sutil — `rx`/`ry` variam de verdade por
+  frame (não é `scale` de `Tween`) + um brilho interno ("vida lá dentro") que muda de
+  posição/tamanho a cada frame.
+- **MOVE = crítico/ferido** (4 frames, reaproveitado — o nome do estado é interno a
+  `AnimatedVisual`, o jogador nunca vê "MOVE"): mesma respiração com amplitude maior + marcas
+  quentes de estresse na casca — visivelmente diferente da saudável, sem ainda estar quebrada.
+- **HIT** (3 frames): squash/recoil real (`rx`/`ry` deformam por impacto) + flash de fratura
+  momentâneo, relaxando de volta.
+- **DEATH = destruído/quebrado** (5 frames, `loop = false`, congela no último frame para sempre):
+  rachaduras se espalhando → casca se separando → fragmento assentando → destruído (interior
+  escuro visível, cacos ao redor no chão). Silhueta genuinamente diferente por estágio
+  (`_draw_egg_broken(stage)`), não uma variação paramétrica da forma inteira.
+
+**Mudança de integração em `egg.gd`:** o golpe letal agora chama `play_state(DEATH)` diretamente
+em vez de `stop_loop()` — DEATH nunca reconecta `animation_finished` (diferente de ATTACK/HIT),
+então a arte de casca quebrada fica na tela para sempre sem nenhum mecanismo novo, preservando a
+regra de gameplay "o ovo continua visível quando destruído". Um golpe não-letal nunca passa por
+DEATH (só HIT, que reverteria ao loop de vida) — as duas coisas nunca tocam no mesmo golpe.
+
+**Removido de `egg.gd`:** o tingimento contínuo por fração de HP (`set_base_modulate` com uma cor
+interpolada de branco a vermelho, mais um cinza translúcido no destruído). Mesma categoria de
+decisão do Checkpoint B (`placeholder_color`): `modulate` multiplica a cor do sprite, e um tom
+não-branco por cima da arte real desenhada nesta etapa desbotaria/distorceria as cores em vez de
+só tingir um polígono monocromático como antes. A diferença saudável/ferido/destruído agora vem
+inteiramente da animação escolhida.
+
+**D2 — Projétil (`assets/projectiles/`, 4 frames, canvas 20×16 — não quadrado):** dardo/garra
+estilizado na paleta do Velociraptor, nariz sempre para +X (o node raiz já gira sozinho para a
+direção do alvo em `projectile.gd`, sem mudança nenhuma aqui). Único estado usado por
+`projectile.gd` é IDLE — sem MOVE/ATTACK/HIT/DEATH (nunca chamados, não criados à toa). Anima o
+tufo/pluma traseiro esvoaçando + um brilho que percorre a lâmina, mantendo a silhueta principal
+sempre igual (trajetória tem que continuar legível independente do frame).
+
+**Arte padrão de `DeathEffect` (`assets/effects/`, 4 frames):** antes só existia um
+`AnimatedSprite2D` vazio (nunca usado sem `set_death_sprite_frames()`) e um `Placeholder`
+(`Polygon2D`) genérico por baixo. Agora o próprio `AnimatedSprite2D` tem `sprite_frames` reais
+desde a cena — um burst de impacto pequeno e rápido (núcleo + raios que se espalham e recolhem),
+usado sempre que o passthrough de sprite de uma criatura não é chamado (impacto de projétil,
+chegada de inimigo ao ninho). O passthrough (morte real do BasicEnemy) continua sobrescrevendo
+normalmente, sem nenhuma mudança nesse mecanismo. `death` roda a 10fps (4 frames = 0.4s) para
+caber exatamente em `DeathEffect._LIFETIME` — mesma relação já usada no `death` do BasicEnemy.
+`Placeholder` foi **removido** (mesmo raciocínio do Checkpoint A/B/C: com `sprite_frames` sempre
+presente, o fallback procedural nunca seria acionado de qualquer forma) — `set_death_sprite_frames()`
+simplificada, removendo a lógica agora morta de esconder um node que não existe mais.
+
+**3 bugs reais de recorte encontrados e corrigidos nesta etapa** (nenhum visível na folha de
+contato padrão — só depois de ampliar bem além dela, mesma lição já repetida nos Checkpoints B/C):
+1. Sombra de contato do ovo tocando a última linha do canvas (`_EGG_GROUND_Y` perto demais da
+   borda de 32px) — corrigida reduzindo a sombra e subindo a âncora vertical do corpo.
+2. Tufo traseiro do projétil ultrapassando a borda esquerda do canvas de 16×16 original — corrigido
+   alargando o canvas para 20×16 e recompondo as coordenadas com folga real (não só encurtando o
+   tufo, que ficava curto demais na primeira tentativa).
+3. Raios do burst de impacto alcançando ~14px de distância do centro num canvas de 24×24 (raio
+   útil de ~9-10px) — fórmula original não levava o tamanho do canvas em conta. Corrigida para um
+   alcance máximo proporcional ao espaço realmente disponível.
+
+Também corrigido: uma variação "crítica"/"ferido" do ovo (`rx`/`ry` maiores) empurrava a própria
+casca — não só a sombra — até a última linha do canvas; subir `_EGG_CY` deu folga para os dois
+problemas ao mesmo tempo.
+
+### Checkpoint E — Efeitos (asset pack)
+
+Entre os 6 tipos de efeito do plano original do asset pack (spawn/attack/impact/damage/death/
+nest-arrival), impact/death/nest-arrival já tinham arte real desde o Checkpoint D (`DeathEffect`
+padrão + passthrough de criatura) e damage continua propositalmente procedural (`DamageNumber`,
+texto flutuante — fora do escopo de pixel art, não revisitado). ATTACK já é a própria animação de
+mordida do Velociraptor (Checkpoint B); adicionar um efeito separado no mesmo instante arriscava
+redundância visual sem necessidade clara, então não foi feito. **O único gap real era SPAWN** — um
+inimigo simplesmente "aparecia" no SPAWN sem nenhum reconhecimento visual, diferente de todo
+outro evento do jogo (que já reage visualmente desde a Phase 0.6). Esse foi o escopo desta etapa.
+
+**`SpawnEffect`** (`game/scripts/visuals/spawn_effect.gd` + `game/scenes/effects/SpawnEffect.tscn`)
+— nova classe, mas **mesmo padrão arquitetural de `DeathEffect`**, não um sistema novo: autônomo,
+instanciado como irmão da entidade (nunca filho), nunca bloqueia quem o gerou, se autodestrói
+sozinho via `Timer` (`_LIFETIME := 0.35`). Reaproveita `AnimatedVisual.State.DEATH` para a
+animação — não por ser uma "morte", mas porque DEATH já é o único estado com o contrato exato que
+um efeito de um-tiro-só precisa (toca uma vez, não reconecta `animation_finished`, nunca reverte a
+outro estado) — mesma reutilização de contrato que `DeathEffect` já fazia para o burst de impacto
+genérico desde o Checkpoint D. Criar um 6º estado (`SPAWN`) em `AnimatedVisual` foi considerado e
+descartado: adicionaria uma classe de estado nova para um contrato que já existe.
+
+**Integração:** `EnemySpawner.spawn_enemy()` instancia um `SpawnEffect` logo depois de
+`enemy.initialize()`, na posição do inimigo recém-criado (mesmo container que já hospeda
+`DamageNumber`/`DeathEffect` — `EnemySpawner` em si, não `Main`). Guardado por `is_inside_tree()`
+(mesmo raciocínio de `BasicEnemy`/`Projectile` para `DeathEffect`): evita instanciar um node cujo
+`_ready()` nunca dispararia mesmo assim, relevante para `wave_tests.gd`, que usa um `EnemySpawner`
+solto via `.new()`, nunca adicionado a uma `SceneTree` real. Nenhuma mudança em HP/dano/path
+following/sinais — só uma chamada visual a mais, puramente aditiva.
+
+**Arte** (`assets/effects/spawn_0-3.png`, 24×24, 4 frames, `loop = false`): poeira/terra
+levantando do chão — o inimigo "emerge" do próprio terreno, tema pré-histórico — em vez de um
+flash de luz (isso já é a linguagem do impacto; precisava ser visualmente distinto para não
+parecer o mesmo efeito reaproveitado sem necessidade). Paleta terrosa puxando para a família de
+cor da trilha, não uma cor nova sem relação com o resto. 4 puffs que mudam de posição/tamanho/tom
+por frame (agrupados e escuros perto do chão → maiores e subindo → pico disperso e mais claro →
+poucos remanescentes clareando antes de sumir) — nunca é só uma cor diferente por cima do mesmo
+desenho.
+
+**1 bug real de recorte encontrado e corrigido** (mesma classe dos 3 do Checkpoint D — só
+apareceu no teste automatizado por pixel, não na inspeção visual): a primeira versão dos
+multiplicadores de espalhamento/subida dos puffs (offset×7, subida×8, raio até 3.8) colocava
+pixels opacos na borda do canvas de 24×24 no frame de pico (`spawn_2.png`, o mais espalhado).
+Corrigida reduzindo os três multiplicadores com folga real, não só o mínimo que coubesse.
+
+### Checkpoint F — Polimento e Integração
+
+Não é um checkpoint de asset pack — nenhum PNG novo, nenhuma silhueta/paleta alterada. Objetivo:
+auditar como os Checkpoints A–E funcionam JUNTOS dentro de `Main.tscn` de verdade (não só em
+composições isoladas) e corrigir defeitos objetivos de integração (escala/offset/posição/timing/
+frame rate/layering) — não redesenho.
+
+**Bug real mais importante encontrado nesta etapa:** `Main.tscn` tinha `debug_visible = true`
+como override de instância no `GridManager`, herdado desde antes de existir qualquer arte real
+(quando debug colors eram a ÚNICA forma de ver a grid). O Checkpoint A mudou o **default** do
+script para `false` ("por padrão desenha os tiles reais"), mas nunca tocou em `Main.tscn` — o
+override de instância continuou vencendo o novo default silenciosamente. Na prática, **a cena de
+produção nunca mostrou a arte pixel real por padrão em nenhum momento entre os Checkpoints A e F**
+— todo o trabalho visual foi validado por inspeção isolada de PNGs/composições, nunca pela cena
+real, porque a cena real sempre caía de volta nos retângulos de cor sólida de debug (F3 alternava
+para o modo "outro" — ou seja, o jogador só veria a arte real apertando F3, o oposto do
+pretendido). Corrigido removendo o override — `GridManager` volta a herdar `debug_visible = false`
+do próprio script, exatamente como todos os outros checkpoints sempre assumiram que já era o caso.
+
+**Layering (`z_index`):** nenhum node do projeto usava `z_index` antes desta etapa — a ordem de
+desenho seguia só a ordem dos nós-irmãos em `Main.tscn`/containers. Isso deixava `DeathEffect`/
+`SpawnEffect`/`DamageNumber` (todos hospedados dentro de `EnemySpawner` ou `Projectiles`, que vêm
+ANTES de `Dinosaurs`/`Projectiles`/`EggManager` na árvore de `Main`) desenhados ATRÁS de qualquer
+raptor/projétil/ovo que estivesse por cima no momento do efeito — contrariando "efeitos aparecerem
+sobre o alvo". Corrigido com `z_index = 10` em `DeathEffect.tscn`/`SpawnEffect.tscn` e
+`z_index = 15` em `DamageNumber.tscn` (mais alto que os outros dois, para o número de dano nunca
+ficar escondido nem atrás de um personagem nem atrás de outro efeito no mesmo lugar) — resolve sem
+precisar reordenar a árvore inteira (que também reordenaria inimigos, não só efeitos).
+
+**HUD — bug real de sobreposição com o mapa:** `PauseButton`/`SpeedButton` ficavam no canto
+superior direito (x:488–632, y:8–44). Auditando as posições REAIS de `vale_dos_ovos.tres` (não
+assumidas — lidas do recurso), as 3 células EGG do mapa ficam em (576–640, 0–64) — o `SpeedButton`
+(x:564–632, y:8–44) sobrepunha diretamente uma delas, e tocava a borda de outras duas. Violava
+"ovos permanecerem claramente visíveis" pedido nesta etapa. Corrigido reagrupando os 4 botões
+(`DinosaurButton`, `PauseButton`, `SpeedButton`, `StartWaveButton`) numa única fileira no rodapé
+(y:332–376, mesma altura de todos, preenchendo o espaço livre entre os dois botões que já
+existiam ali) — libera todo o topo do mapa, zero sobreposição com qualquer célula EGG/SPAWN/NEST
+do mapa real (posições conferidas uma a uma).
+
+**HUD — legibilidade de texto sobre o mapa:** com `debug_visible` corrigido, os `Label`s da HUD
+(`EggsLabel`/`CoinsLabel`/`WaveLabel`/`WaveStateLabel`/`BannerLabel`/etc.) passam a desenhar por
+cima da arte pixel de verdade (grama/trilha com tons variados), não mais sobre um fundo de debug
+sólido e escuro que garantia contraste de graça. Adicionado um `Theme` mínimo (`Label/colors/
+font_outline_color` + `Label/constants/outline_size = 3`) no `Root` da HUD — todo `Label` herda um
+contorno escuro automaticamente, sem precisar repetir a configuração em cada node nem criar um
+sistema de HUD novo. Mesmo raciocínio aplicado a `DamageNumber` (`draw_string_outline()` antes do
+`draw_string()` colorido) — o número de dano é `CanvasItem.draw_string()` direto, não um `Label`,
+então não herda o `Theme` da HUD; precisa do próprio contorno.
+
+**Animações — timing auditado, nenhum ajuste necessário:** revisados os fps de todas as
+`SpriteFrames` existentes (Velociraptor, BasicEnemy, Egg, Projectile, DeathEffect, SpawnEffect)
+contra a métrica real de gameplay onde aplicável (ex: `attack_interval = 0.6s` do Velociraptor vs.
+0.43s de duração da animação ATTACK — cabe com folga, nunca corta nem se sobrepõe ao próximo
+disparo). Todos os valores já fazem sentido relativo entre si (loops mais lentos para estados
+passivos, reações rápidas para HIT/ATTACK, `death`/`impact`/`spawn` casados com o lifetime fixo
+dos efeitos que os usam) — nenhum frame rate estava "claramente inadequado" a ponto de justificar
+mudança nesta etapa.
+
+**Feedback de gameplay — auditoria de cobertura, nenhum efeito novo necessário:** todo evento
+listado nesta etapa (nasceu/dano/morte/impacto/ovo-dano/ovo-destruído/wave-início/wave-fim/
+última-wave/GAME OVER/pausa) já tinha um sinal real conectado a uma reação visual concreta antes
+desta etapa (`Dinosaur.fired`, `BasicEnemy.damaged`/`died`, `Projectile.impacted`, `Egg.damaged`,
+`WaveManager.wave_started`/`wave_completed`, `EggManager.all_eggs_destroyed`,
+`EnemySpawner.enemy_spawned`) — confirmado lendo o código, não assumido. Nenhuma coleção de
+efeitos redundante foi criada.
+
+**Pontos de integração de áudio (documentação — nenhum asset/AudioManager criado nesta etapa):**
+onde um som entraria naturalmente quando existir orçamento de áudio, todos já como sinais/pontos
+de chamada existentes, sem precisar de nenhuma reestruturação:
+- Ataque: `Dinosaur.fired(dinosaur, projectile)` (`scripts/dinosaurs/dinosaur.gd`)
+- Impacto: `Projectile.impacted(projectile, target)` (`scripts/combat/projectile.gd`)
+- Dano: `BasicEnemy.damaged(enemy, amount)` / `Egg.damaged(egg, amount)`
+- Morte: `BasicEnemy.died(enemy)`
+- Spawn: `EnemySpawner.enemy_spawned(enemy)` (mesmo ponto onde `SpawnEffect` já é instanciado)
+- Início de wave: `WaveManager.wave_started(wave_index, wave)`
+- Conclusão de wave / vitória: `WaveManager.wave_completed(wave_index, wave)` (`Main._on_wave_completed()`
+  já diferencia "última wave" internamente para o banner de vitória — o mesmo sinal serve para SFX
+  diferente por condição, se necessário)
+- GAME OVER: `EggManager.all_eggs_destroyed()`
+- Pausa: `HUD.pause_pressed`/`resume_pressed`
+
+**Validação visual desta etapa — composição vs. tela real (distinção explícita, pedida pelo
+usuário):** **validado por composição matemática** (mesma técnica do checkpoint de integração
+anterior — PNGs reais na mesma matemática de posicionamento do jogo): posições exatas de
+EGG/SPAWN/NEST lidas diretamente de `vale_dos_ovos.tres` (não estimadas), confirmando a
+sobreposição do `SpeedButton` e a correção depois de aplicada. **NÃO confirmado em tela real:**
+como o contorno dos `Label`s realmente fica sobre a textura da grama/trilha em movimento, timing
+percebido das animações em jogo, e o efeito visual concreto do `debug_visible` corrigido (a
+mudança mais importante desta etapa) — todos dependem de uma sessão no editor com tela real, ainda
+não disponível neste ambiente (mesma tentativa de screenshot headless já documentada no checkpoint
+anterior, que trava indefinidamente nesta plataforma).
+
+### Testes
+
+`game/tests/visual_prototype_tests.gd` — confirma que `Dinosaur`/`BasicEnemy` realmente
+usam o `AnimatedSprite2D` (não caem silenciosamente no fallback procedural por um erro de
+wiring), que uma reação sprite-driven (ATTACK/HIT) volta sozinha ao loop anterior ao terminar
+(`animation_finished.emit()` simulado, sem depender de tempo real), e que `DeathEffect` recebe o
+`SpriteFrames` da criatura numa morte de verdade. Não testa a arte em si (cores/formas exatas de
+pixel) — só o contrato de estados que `AnimatedVisual`/gameplay dependem.
+
+`game/tests/environment_assets_tests.gd` (novo, checkpoint de Ambiente) — cobre o contrato de
+arquivo dos 26 PNGs de `assets/environment/`: tiles de chão (grama/trilha) existem, são 32×32 e
+totalmente opacos; tiras de borda existem com as dimensões retangulares corretas (32×10 ou 10×32)
+e também opacas; decorações e detalhes existem, são 32×32 e têm pelo menos um pixel transparente
+(não são um bloco sólido cobrindo o tile); variações de grama e de trilha são de fato
+pixel-a-pixel diferentes entre si (`_pixel_diff_count()` — não basta existir um nome de arquivo
+diferente, mesma lição do bug do focinho do raptor); nenhuma decoração/detalhe toca as 4 bordas do
+canvas simultaneamente (sinal de conteúdo vazando para fora da célula). Não testa a composição
+artística em si (cores/formas exatas) nem a integração real em `GridManager` — isso é coberto
+indiretamente pelo compile-check (`preload()` falha se o arquivo não existir).
+
+`game/tests/velociraptor_assets_tests.gd` (novo, Checkpoint B) — cobre o contrato de arquivo dos
+19 PNGs de `assets/dinosaurs/velociraptor/`: existem, são 48×48, têm fundo transparente; **nenhum
+pixel opaco toca a borda externa do canvas** em nenhum frame (teste direto para a classe de bug de
+recorte encontrada duas vezes nesta etapa — mais rigoroso que o equivalente de
+`environment_assets_tests.gd`, que só rejeita tocar as 4 bordas ao mesmo tempo: aqui qualquer
+única borda tocada já falha, porque um personagem nunca deveria legitimamente encostar na borda,
+diferente de uma decoração de ambiente); frames consecutivos de cada animação não são
+pixel-a-pixel idênticos; o `SpriteFrames` final tem as 4 animações (`idle`/`move`/`attack`/`hit`)
+com a contagem mínima de frames exigida (4/6/6/3) e nenhum frame aponta para textura nula;
+`Dinosaur.tscn` referencia esse `SpriteFrames`. Não testa a arte em si (cores/formas exatas).
+
+`game/tests/basic_enemy_assets_tests.gd` (novo, Checkpoint C) — mesmo padrão de
+`velociraptor_assets_tests.gd`, aplicado aos 15 PNGs de `assets/enemies/basic_enemy/`: existem,
+são 48×48, fundo transparente, nenhum pixel opaco toca a borda do canvas, frames consecutivos
+diferem de verdade, `SpriteFrames` com `move`/`hit`/`death` na contagem mínima (6/3/6) e nenhum
+frame nulo, `BasicEnemy.tscn` referencia esse `SpriteFrames`.
+
+`game/tests/egg_projectile_assets_tests.gd` (novo, Checkpoint D) — mesmo padrão, cobrindo os 3
+grupos de uma vez: os 16 PNGs de `assets/eggs/` (32×32), os 4 de `assets/projectiles/` (20×16 —
+único grupo não-quadrado até agora, o teste aceita largura/altura esperadas separadas), e os 4 de
+`assets/effects/` (burst de impacto padrão, 24×24); dimensões, transparência, nenhum pixel opaco
+na borda, frames consecutivos realmente diferentes, os 3 `SpriteFrames` (`egg_sprite_frames.tres`,
+`projectile_sprite_frames.tres`, `impact_sprite_frames.tres`) com as animações esperadas e
+contagem mínima, `Egg.tscn`/`Projectile.tscn`/`DeathEffect.tscn` referenciando cada um. Também em
+`egg_tests.gd`: um teste novo confirma que o golpe letal toca `DEATH` diretamente (não `HIT`) e
+que a animação não reverte para IDLE/MOVE depois de terminar (`animation_finished.emit()`
+simulado) — a regra de gameplay "ovo continua visível quando destruído" depende disso.
+
+`game/tests/spawn_effect_assets_tests.gd` (novo, Checkpoint E) — mesmo padrão, cobrindo os 4 PNGs
+de `assets/effects/spawn_0-3.png` (24×24): dimensões, transparência, nenhum pixel opaco na borda,
+frames consecutivos realmente diferentes, `spawn_sprite_frames.tres` com a animação `death` e
+contagem mínima, `SpawnEffect.tscn` referenciando esse `SpriteFrames`. A integração (`EnemySpawner`
+realmente instancia um `SpawnEffect` sibling ao spawnar) é coberta por um teste novo em
+`integration_tests.gd` (que já carregava `Main.tscn` de verdade para o resto do pipeline
+MapPath→EnemySpawner→BasicEnemy) — conta exatamente 1 `SpawnEffect` entre os filhos do
+`EnemySpawner` depois de `spawn_enemy()`.
+
+### Decisões que precisam de validação visual real
+
+Sem loop de interação visual/mouse/teclado disponível — mesma limitação já registrada em fases
+anteriores. **Capturar um screenshot real do motor em modo `--headless` foi tentado explicitamente
+(checkpoint de integração entre D e E) e travou indefinidamente** — `get_viewport().get_texture()`
+não renderiza nesta plataforma sem display; abortado, confirmando que não há uma forma segura
+disponível, não só assumindo que não havia.
+
+O que foi possível validar: inspeção direta de todos os PNGs via leitura de imagem em várias
+escalas (confirmou silhueta/contraste/legibilidade dos personagens e tiles isoladamente; permitiu
+corrigir o bug de recorte do focinho do raptor, o desbalanceamento grama/trilha da tira de borda,
+o recorte do focinho no lunge do ATTACK e a mordida ilegível por área insuficiente do polígono no
+Checkpoint B, a fórmula de achatamento invertida do colapso de morte no Checkpoint C, os 3
+recortes de borda (sombra do ovo, tufo do projétil, raios do impacto) no Checkpoint D, e o recorte
+dos puffs de poeira no Checkpoint E — nenhum desses ficou óbvio na folha de contato padrão, só
+ampliando bem além dela ou, nos recortes de borda, com um teste automatizado dedicado por pixel);
+a folha de contato ampliada (`preview_contact_sheet.gd`) para conferir as peças de ambiente e os
+frames de personagens/ovo/projétil/impacto/spawn lado a lado; e, no checkpoint de integração, uma
+composição manual dos PNGs já existentes usando a MESMA matemática de posicionamento real
+(`_pick()` determinístico, `cell_to_world()+cell_size/2`, sprite centrado) — confirmou escala
+relativa raptor/inimigo/ovo/projétil coerente, transição grama↔trilha contínua (um crop mais largo
+tinha enganado a primeira leitura visual — um crop isolado das colunas de trilha confirmou que era
+uma textura serrilhada única, não uma segunda lacuna), paleta consistente entre categorias, e
+filtro Nearest confirmado via `.import`/`project.godot` (não só assumido). Ausência de
+erro/warning/leak em todas as execuções headless, sempre. **Ainda não verificado:** como a grid
+renderizada de verdade fica dentro do editor com tela real (alinhamento fino dos tiles, timing
+real da animação em jogo — incluindo `SpriteFrames` de Velociraptor/BasicEnemy/Egg/Projectile/
+DeathEffect/SpawnEffect —, legibilidade da cena completa com todos os elementos em movimento,
+percepção real de velocidade de animação) — precisa de uma sessão no editor com tela real antes de
+considerar o protótipo visual validado ponta a ponta.

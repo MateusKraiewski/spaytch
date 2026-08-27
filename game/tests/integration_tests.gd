@@ -79,6 +79,17 @@ func _initialize() -> void:
 
 	_check(spawned_enemy_holder[0] != null, "spawn_enemy() should have produced a BasicEnemy via the signal")
 
+	# Checkpoint E — spawn_enemy() também deveria ter gerado um SpawnEffect autônomo, irmão do
+	# BasicEnemy dentro do próprio EnemySpawner (mesmo container que já hospeda DamageNumber/
+	# DeathEffect, ver combat_integration_tests.gd). `spawner` está numa SceneTree real aqui
+	# (dentro de `main`, adicionado a `root` acima), então `is_inside_tree()` em spawn_enemy()
+	# deveria ter deixado passar.
+	var spawn_effect_count := 0
+	for child in spawner.get_children():
+		if child is SpawnEffect:
+			spawn_effect_count += 1
+	_check(spawn_effect_count == 1, "spawn_enemy() deveria ter gerado exatamente 1 SpawnEffect, got %d" % spawn_effect_count)
+
 	if spawned_enemy_holder[0] != null:
 		var spawned_enemy: BasicEnemy = spawned_enemy_holder[0]
 		var grid_manager := main.get_node("GridManager") as GridManager

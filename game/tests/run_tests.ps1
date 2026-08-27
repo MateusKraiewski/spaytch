@@ -101,7 +101,13 @@ $testFiles = @(
     "res://tests/wave_tests.gd",
     "res://tests/game_loop_integration_tests.gd",
     "res://tests/ux_tests.gd",
-    "res://tests/animated_visual_tests.gd"
+    "res://tests/animated_visual_tests.gd",
+    "res://tests/visual_prototype_tests.gd",
+    "res://tests/environment_assets_tests.gd",
+    "res://tests/velociraptor_assets_tests.gd",
+    "res://tests/basic_enemy_assets_tests.gd",
+    "res://tests/egg_projectile_assets_tests.gd",
+    "res://tests/spawn_effect_assets_tests.gd"
 )
 $testFailures = @()
 foreach ($test in $testFiles) {

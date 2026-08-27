@@ -1,3 +1,4 @@
+class_name DeathEffect
 extends Node2D
 ## Efeito visual autônomo, desacoplado do gameplay: instanciado no momento
 ## da morte de um inimigo, da chegada ao ninho, ou do impacto de um

@@ -49,16 +49,29 @@ const _STATE_NAMES := {
 ## entidades deixam no branco padrão.
 var base_modulate: Color = Color.WHITE
 
+## Último estado pedido via play_state() (qualquer um dos 5) e último
+## especificamente da trilha de loop (só IDLE/MOVE) — introspecção pura
+## para testes (mesmo espírito de Dinosaur.current_target()); nada além
+## disso lê estes campos, e eles não influenciam nenhuma decisão de
+## gameplay. Separados porque uma entidade comum chama IDLE/MOVE e depois
+## HIT no mesmo instante (ex: Egg — loop de vida + flash de dano) —
+## `last_state` sozinho não bastaria para inspecionar qual variante de loop
+## está tocando.
+var last_state: State = State.IDLE
+var last_loop_state: State = State.IDLE
+
 @onready var _sprite: AnimatedSprite2D = get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
 
 var _loop_tween: Tween = null
 var _reaction_tween: Tween = null
 var _base_scale: Vector2 = Vector2.ONE
+var _base_position: Vector2 = Vector2.ZERO
 var _has_spawned: bool = false
 
 
 func _ready() -> void:
 	_base_scale = scale
+	_base_position = position
 	modulate = base_modulate
 
 
@@ -71,7 +84,17 @@ func set_base_modulate(color: Color) -> void:
 	modulate = color
 
 
+## Também para a trilha de loop (IDLE/MOVE) — usado quando uma entidade
+## precisa silenciar a animação de repouso sem tocar nenhuma reação (ex:
+## Egg quando destruído: fica estático, cinza, sem pulso de "vivo").
+func stop_loop() -> void:
+	if _loop_tween != null and _loop_tween.is_valid():
+		_loop_tween.kill()
+	rotation = 0.0
+
+
 func play_state(state: State) -> void:
+	last_state = state
 	if not is_inside_tree():
 		return
 
@@ -88,6 +111,7 @@ func play_state(state: State) -> void:
 
 
 func _play_loop(state: State) -> void:
+	last_loop_state = state
 	_spawn_pop_if_first()
 
 	if _loop_tween != null and _loop_tween.is_valid():
@@ -107,16 +131,31 @@ func _play_loop(state: State) -> void:
 func _play_reaction(state: State) -> void:
 	if _reaction_tween != null and _reaction_tween.is_valid():
 		_reaction_tween.kill()
+	scale = _base_scale
+	position = _base_position
 
 	match state:
 		State.ATTACK:
+			# Pulso de escala + um pequeno "recoil" (recuo) no eixo local -X —
+			# aproximação simples, não mira de verdade no alvo (AnimatedVisual
+			# não conhece gameplay/alvo, só reage ao próprio estado); efeito
+			# puramente estilístico de "empurrão do disparo".
 			scale = _base_scale * 1.2
+			position = _base_position + Vector2(-4, 0)
 			_reaction_tween = create_tween()
+			_reaction_tween.set_parallel(true)
 			_reaction_tween.tween_property(self, "scale", _base_scale, 0.14)
+			_reaction_tween.tween_property(self, "position", _base_position, 0.14).set_trans(Tween.TRANS_SINE)
 		State.HIT:
+			# Flash de cor + um "squash" curto (achata e alarga) — mais
+			# perceptível que só mudar `modulate`, sem sair do orçamento de
+			# efeito barato para mobile (um Tween paralelo curto).
 			modulate = Color(2.0, 2.0, 2.0, base_modulate.a)
+			scale = _base_scale * Vector2(1.25, 0.75)
 			_reaction_tween = create_tween()
+			_reaction_tween.set_parallel(true)
 			_reaction_tween.tween_property(self, "modulate", base_modulate, 0.15)
+			_reaction_tween.tween_property(self, "scale", _base_scale, 0.15).set_trans(Tween.TRANS_BACK)
 		State.DEATH:
 			_reaction_tween = create_tween()
 			_reaction_tween.set_parallel(true)

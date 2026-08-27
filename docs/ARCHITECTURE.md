@@ -142,7 +142,8 @@ game/
 │   │   └── egg_manager.gd      # cria Egg a partir do mapa, aplica dano ao alcançar o ninho, Node
 │   ├── visuals/
 │   │   ├── animated_visual.gd  # Phase 0.6: play_state(IDLE/MOVE/ATTACK/HIT/DEATH), Node2D
-│   │   └── death_effect.gd     # Phase 0.6: efeito visual autônomo de morte/impacto, Node2D
+│   │   ├── death_effect.gd     # Phase 0.6: efeito visual autônomo de morte/impacto, Node2D
+│   │   └── damage_number.gd    # número de dano flutuante, autônomo (mesmo padrão de death_effect.gd), Node2D
 │   └── ui/
 │       └── hud.gd              # HUD: só exibe e encaminha input, CanvasLayer
 ├── data/
@@ -189,9 +190,10 @@ em `scripts/`, seguindo convenção comum e atendendo ao requisito de testes da 
 
 ## Cenas (Scenes)
 
-Oito cenas existem: `scenes/MainMenu.tscn` (Phase 0.6), `scenes/Main.tscn`,
+Nove cenas existem: `scenes/MainMenu.tscn` (Phase 0.6), `scenes/Main.tscn`,
 `scenes/enemies/BasicEnemy.tscn`, `scenes/dinosaurs/Dinosaur.tscn`, `scenes/combat/Projectile.tscn`,
-`scenes/eggs/Egg.tscn`, `scenes/effects/DeathEffect.tscn` (Phase 0.6) e `scenes/ui/HUD.tscn`.
+`scenes/eggs/Egg.tscn`, `scenes/effects/DeathEffect.tscn`, `scenes/effects/DamageNumber.tscn` e
+`scenes/ui/HUD.tscn`.
 
 `scenes/MainMenu.tscn` — cena de boot do projeto (`project.godot` `run/main_scene`), sem nenhuma
 dependência da cena de jogo:
@@ -289,6 +291,13 @@ DeathEffect (Node2D, death_effect.gd)
         └── Placeholder (Polygon2D)   # TEMPORÁRIO — pequeno losango bege/neutro
 ```
 
+`scenes/effects/DamageNumber.tscn` (número de dano flutuante autônomo — sem `Visual`/
+`AnimatedVisual`, desenha o próprio texto via `draw_string()`, não usa Polygon2D/estados):
+
+```
+DamageNumber (Node2D, damage_number.gd)
+```
+
 `scenes/eggs/Egg.tscn`:
 
 ```
@@ -334,7 +343,8 @@ o texto continua claro sozinho).
 - Classes com `class_name` (`CellType`, `Cell`, `Grid`, `MapDefinition`, `GridManager`,
   `InputManager`, `MapValidator`, `MapPath`, `BasicEnemy`, `EnemySpawner`, `DinosaurDefinition`,
   `Dinosaur`, `Targeting`, `Projectile`, `PlacementController`, `PlacementPreview`, `Economy`,
-  `WaveDefinition`, `WaveManager`, `Egg`, `EggManager`, `HUD`, `AnimatedVisual`) são registradas
+  `WaveDefinition`, `WaveManager`, `Egg`, `EggManager`, `HUD`, `AnimatedVisual`, `DeathEffect`,
+  `DamageNumber`) são registradas
   globalmente pelo
   Godot e não exigem `preload`/`load` manual — **mas o registro depende de um scan de projeto já
   ter rodado** (ver limitação documentada na
@@ -484,6 +494,7 @@ as **ondas** e os **ovos**:
 | Menu | `main_menu.gd` | `Control` | Cena de boot: título/JOGAR/OPÇÕES/SAIR, navega para `Main.tscn` |
 | Apresentação | `animated_visual.gd` | `Node2D` | Estados IDLE/MOVE/ATTACK/HIT/DEATH desacoplados de gameplay (ver [AnimatedVisual](#animatedvisual-e-deatheffect-phase-06)) |
 | Efeito | `death_effect.gd` | `Node2D` | Feedback visual autônomo de morte/chegada/impacto, independente do `queue_free()` da entidade |
+| Efeito | `damage_number.gd` | `Node2D` | Número de dano flutuante, autônomo (mesmo padrão de `death_effect.gd`) |
 
 Nenhuma economia premium, loja, login/conta real, persistência entre sessões, ou arte/áudio final
 existe ainda.
@@ -1125,7 +1136,8 @@ apenas o `SceneTree` do próprio Godot em modo headless.
   célula BUILDABLE real do Vale dos Ovos, um inimigo criado via `spawn_enemy()` direto (sem
   envolver wave/economia — isso é `game_loop_integration_tests.gd`), `Dinosaur` real instanciado,
   inimigo avançado em lockstep com `Dinosaur.step()`/`Projectile.step()` até morrer pelos disparos
-  do dinossauro **antes** de alcançar o ninho.
+  do dinossauro **antes** de alcançar o ninho. Reforço pós Phase 0.6: confirma que cada hit gerou
+  um `DamageNumber` e a morte gerou um `DeathEffect`, ambos como filhos de `EnemySpawner`.
 - `game/tests/economy_tests.gd` (Phase 0.5) — `coins` inicial, `can_afford`, `spend`
   (sucesso/falha, e que falha não desconta), `add` (inclusive ignorar valores `<= 0`), sinal
   `coins_changed` (emitido em sucesso, não emitido em falha).
@@ -1133,7 +1145,10 @@ apenas o `SceneTree` do próprio Godot em modo headless.
   destruição em 0 hp (sem hp negativo), sinais `damaged`/`destroyed`, sem dano/sinal duplicado
   após destruído. `EggManager`: quantidade/posições derivadas de `MapDefinition.get_egg_positions()`,
   `all_destroyed()`, seleção determinística (primeiro ovo vivo, na ordem do mapa), sinal
-  `all_eggs_destroyed`, e reação real a `EnemySpawner.enemy_reached_nest`.
+  `all_eggs_destroyed`, e reação real a `EnemySpawner.enemy_reached_nest`. Reforço pós Phase 0.6
+  (precisa de árvore real — `Egg.tscn` instanciado via `root.add_child`): loop de "vivo" escolhe
+  `IDLE` acima do limiar crítico de HP e `MOVE` abaixo dele (`_visual.last_loop_state`), e para
+  (`stop_loop()`) quando o ovo é destruído.
 - `game/tests/wave_tests.gd` (Phase 0.5) — `WaveManager` com `EnemySpawner` real (mapa sintético
   SPAWN-PATH-NEST): início de wave + sinal, impedir duas waves simultâneas, contagem correta de
   spawn ao longo de `step(delta)`, conclusão só quando não sobra nenhum inimigo ativo,
@@ -1152,14 +1167,21 @@ apenas o `SceneTree` do próprio Godot em modo headless.
   mostram/escondem o overlay, iniciar uma wave mostra o banner "WAVE 1", completá-la mostra um
   banner com "COMPLETE", e o botão de dinossauro permite colocar um segundo Velociraptor depois do
   primeiro placement (deriva as coordenadas de `MapDefinition.get_buildable_cells()`, não
-  hardcoded, para não depender de um layout específico do Vale dos Ovos).
+  hardcoded, para não depender de um layout específico do Vale dos Ovos). Reforço pós Phase 0.6:
+  a última wave completada mostra um banner de "VITÓRIA" distinto do genérico "COMPLETE" das
+  anteriores — testado avançando `current_wave_index` direto para a última e emitindo o sinal real
+  `wave_completed` (não simula combate pelas 3 waves reais: sobreviver sem perder os 3 ovos
+  depende da dificuldade/balance atual, que não é o que este teste quer verificar).
 - `game/tests/animated_visual_tests.gd` (Phase 0.6) — `AnimatedVisual`: `play_state()` fora de
   uma árvore não lança erro; fallback procedural muda `modulate` num HIT real; `set_base_modulate()`
   aplica a cor imediatamente; com um `AnimatedSprite2D` filho tendo uma animação "hit" em
   `sprite_frames`, `play_state(HIT)` toca essa animação; sem uma animação "attack" correspondente,
   não finge tocar uma inexistente (cai no fallback). `placement_tests.gd` ganhou 2 casos novos:
   `dinosaur_placed` emitido com o `Dinosaur`/coordenada corretos, e `can_afford_selected()`
-  refletindo `Economy` para custos diferentes.
+  refletindo `Economy` para custos diferentes. Reforço pós Phase 0.6: `last_state` reflete a
+  chamada mais recente, `last_loop_state` ignora chamadas de reação (HIT/ATTACK/DEATH) que vêm
+  depois de um loop, `stop_loop()` mata o loop tween e zera `rotation`, HIT distorce `scale`
+  (squash) além de `modulate`, ATTACK desloca `position` (recoil) além de `scale`.
 
 **Como executar (recomendado — inclui verificação de compilação, ver Phase 0.2.1):**
 
@@ -1673,9 +1695,10 @@ sonoros devem ser conectados no futuro, mapeados para sinais/eventos que já exi
 | hit | `Projectile.impacted` / `BasicEnemy.damaged` |
 | death | `BasicEnemy.died` |
 | wave start | `WaveManager.wave_started` |
-| wave complete | `WaveManager.wave_completed` |
+| wave complete | `WaveManager.wave_completed` (com `WaveManager.has_next_wave() == false`: ver "vitória/conclusão" abaixo) |
 | egg hit | `Egg.damaged` |
 | game over | `EggManager.all_eggs_destroyed` |
+| vitória/conclusão | `WaveManager.wave_completed`, mesmo sinal de "wave complete" — quem for tocar áudio decide o clipe olhando `WaveManager.has_next_wave()` no momento do evento, igual à `HUD` já faz para o texto do banner (ver "Reforço de Feedback Visual e Combate" abaixo) |
 
 Nenhum placeholder sonoro foi adicionado — o projeto não tem nenhum asset de áudio ainda, e gerar
 um só para preencher esta tabela seria inventar conteúdo fora do escopo pedido.
@@ -1729,3 +1752,47 @@ rodar qualquer teste). Corrigido com o mesmo padrão já estabelecido desde a Ph
   Phase 0.4 (ver [HUD](#hud)).
 - **Nenhum placeholder de áudio foi criado** — o projeto não tem nenhum asset sonoro ainda; a
   tabela de ganchos (ver acima) documenta os pontos de integração futuros sem inventar conteúdo.
+
+## Reforço de Feedback Visual e Combate (pós Phase 0.6)
+
+Rodada de hardening sobre o que a Phase 0.6 já entregou — sem nova numeração de fase (o commit
+`8b47669` já fechou a Phase 0.6; isto é refinamento do mesmo sistema, não conteúdo novo). Mudanças
+reais:
+
+- **`AnimatedVisual` ganhou `stop_loop()`** — mata o `_loop_tween` ativo e zera `rotation`; usado
+  por `Egg` quando destruído (o loop de "vivo" deve parar, não continuar pulsando num ovo morto).
+- **`AnimatedVisual` ganhou `last_state`/`last_loop_state`** — introspecção pura para testes (mesmo
+  espírito de `Dinosaur.current_target()`), sem nenhum efeito em gameplay. Separados porque `Egg`
+  chama um estado de loop e depois HIT no mesmo `_update_visual()` — `last_state` sozinho sempre
+  acabaria em HIT, mascarando qual variante de loop foi escolhida.
+- **HIT ganhou um "squash" de escala além do flash de cor**, e **ATTACK ganhou um pequeno recoil de
+  posição** (~4px, eixo local -X) além do pulso de escala — ambos na trilha de reação já existente
+  (`_reaction_tween`), sem introduzir uma terceira trilha nem tocar a trilha de loop. Efeito
+  puramente estilístico: `AnimatedVisual` não conhece a direção real do alvo (permaneceria
+  desacoplado de gameplay mesmo que conhecesse), então o recoil é uma aproximação, não mira de
+  verdade.
+- **`Egg` ganha um loop de "vivo" contínuo** (`IDLE` acima de 30% HP, `MOVE` — reaproveitado como
+  "pulso de urgência", não literalmente "andando", o jogador nunca vê o nome do estado — abaixo
+  disso), desligado via `stop_loop()` na destruição. Antes desta rodada, o ovo só reagia no
+  instante do dano (flash de HIT); entre danos, ficava visualmente parado — violava a regra do
+  projeto de "nenhuma entidade estática".
+- **`DamageNumber`** (`scripts/visuals/damage_number.gd` + `scenes/effects/DamageNumber.tscn`,
+  `class_name DamageNumber`) — número de dano flutuante, mesmo padrão de autonomia de
+  `DeathEffect` (spawnado como irmão via `get_parent().add_child()`, nunca no caminho crítico,
+  autodestrói via timer). Desenhado com `draw_string()` nativo do `CanvasItem` (texto já nasce em
+  espaço de mundo, sem conversão de câmera) em vez de um `Label`/`Control` — mais simples para um
+  efeito que só sobe e desaparece. Acionado em `BasicEnemy.take_damage()` e `Egg.take_damage()`.
+- **`DeathEffect` ganhou `class_name`** (antes só tinha o de `DamageNumber` desde sua criação) —
+  consistência entre os dois efeitos autônomos, e permite `child is DeathEffect` em testes em vez
+  de checar `resource_path` do script manualmente.
+- **Banner de vitória distinto na última wave:** `Main._on_wave_completed()` agora mostra
+  "🏆 VITÓRIA! ..." em vez do banner genérico "WAVE N COMPLETE!" quando
+  `not _wave_manager.has_next_wave()` — antes disso, terminar a última wave técnica de teste só
+  desabilitava o botão "Iniciar Onda" silenciosamente, sem nenhuma explicação. Reaproveita o
+  `WaveManager.wave_completed` já existente (mesmo sinal, decisão de texto diferente em `Main.gd`)
+  — não é um novo estado de `GameState` nem um sistema de "vitória" novo; as 3 waves continuam
+  sendo dados de validação técnica, não conteúdo final (ver `docs/GAME_BIBLE.md`, seção Waves).
+- **Auditoria mobile/HUD/placement/legibilidade:** revisão completa contra o pedido desta rodada —
+  nenhuma mudança de código foi necessária além do já existente (tamanhos de botão, contraste de
+  grid, ausência de dependência de hover, HUD não cobrindo o mapa já atendiam ao critério). Ver
+  relatório da sessão para o detalhamento ponto a ponto.

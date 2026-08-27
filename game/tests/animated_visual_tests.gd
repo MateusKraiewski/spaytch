@@ -28,6 +28,11 @@ func _initialize() -> void:
 	await _test_set_base_modulate_applies_immediately()
 	await _test_sprite_animation_used_when_available()
 	await _test_sprite_animation_ignored_when_missing()
+	await _test_last_state_tracks_most_recent_call()
+	await _test_last_loop_state_ignores_reaction_calls()
+	await _test_stop_loop_kills_loop_tween()
+	await _test_hit_reaction_also_squashes_scale()
+	await _test_attack_reaction_recoils_position()
 
 	if _failures == 0:
 		print("[animated_visual_tests] ALL TESTS PASSED")
@@ -110,6 +115,88 @@ func _test_sprite_animation_ignored_when_missing() -> void:
 
 	visual.play_state(AnimatedVisual.State.ATTACK)
 	_check(sprite.animation != "attack", "sprite_frames sem 'attack' não deveria fingir que tocou essa animação")
+
+	root.remove_child(visual)
+	visual.free()
+
+
+func _test_last_state_tracks_most_recent_call() -> void:
+	var visual := AnimatedVisual.new()
+	root.add_child(visual)
+	await process_frame
+
+	visual.play_state(AnimatedVisual.State.IDLE)
+	_check(visual.last_state == AnimatedVisual.State.IDLE, "last_state deveria refletir a última chamada (IDLE)")
+	visual.play_state(AnimatedVisual.State.HIT)
+	_check(visual.last_state == AnimatedVisual.State.HIT, "last_state deveria refletir a última chamada (HIT)")
+
+	root.remove_child(visual)
+	visual.free()
+
+
+## Egg chama IDLE/MOVE (loop de vida) e depois HIT (flash de dano) no mesmo
+## _update_visual() — last_state sozinho ficaria sempre em HIT depois disso,
+## por isso existe last_loop_state separado (só a trilha de loop escreve
+## nele). Sem essa separação, não haveria como inspecionar qual variante de
+## loop está ativa depois de qualquer dano.
+func _test_last_loop_state_ignores_reaction_calls() -> void:
+	var visual := AnimatedVisual.new()
+	root.add_child(visual)
+	await process_frame
+
+	visual.play_state(AnimatedVisual.State.MOVE)
+	visual.play_state(AnimatedVisual.State.HIT)
+	_check(visual.last_loop_state == AnimatedVisual.State.MOVE,
+		"last_loop_state não deveria mudar quando uma reação (HIT) toca depois, got %s" % visual.last_loop_state)
+	_check(visual.last_state == AnimatedVisual.State.HIT,
+		"last_state deveria continuar reflentindo a chamada mais recente (HIT)")
+
+	root.remove_child(visual)
+	visual.free()
+
+
+func _test_stop_loop_kills_loop_tween() -> void:
+	var visual := AnimatedVisual.new()
+	root.add_child(visual)
+	await process_frame
+
+	visual.play_state(AnimatedVisual.State.IDLE)
+	_check(visual._loop_tween != null and visual._loop_tween.is_valid(),
+		"sanity: IDLE deveria ter criado um loop tween ativo")
+
+	visual.stop_loop()
+	_check(not visual._loop_tween.is_valid(), "stop_loop deveria matar o loop tween ativo")
+	_check(visual.rotation == 0.0, "stop_loop deveria devolver rotation para 0")
+
+	root.remove_child(visual)
+	visual.free()
+
+
+## HIT não é só um flash de cor — inclui um "squash" curto de escala
+## (Bloco 3: feedback mais perceptível que só modulate). Verifica que a
+## escala muda IMEDIATAMENTE (mesma lógica de "aplica na hora, Tween só
+## reverte depois" já usada por set_base_modulate/HIT/modulate).
+func _test_hit_reaction_also_squashes_scale() -> void:
+	var visual := AnimatedVisual.new()
+	root.add_child(visual)
+	await process_frame
+
+	visual.play_state(AnimatedVisual.State.HIT)
+	_check(visual.scale != Vector2.ONE, "HIT deveria distorcer a escala (squash) imediatamente, got %s" % visual.scale)
+
+	root.remove_child(visual)
+	visual.free()
+
+
+## ATTACK inclui um pequeno recoil de posição além do pulso de escala.
+func _test_attack_reaction_recoils_position() -> void:
+	var visual := AnimatedVisual.new()
+	root.add_child(visual)
+	await process_frame
+
+	var base_position := visual.position
+	visual.play_state(AnimatedVisual.State.ATTACK)
+	_check(visual.position != base_position, "ATTACK deveria deslocar a posição (recoil) imediatamente, got %s" % visual.position)
 
 	root.remove_child(visual)
 	visual.free()

@@ -39,6 +39,7 @@ signal damaged(enemy: BasicEnemy, amount: int)  ## Phase 0.5 — gancho para fee
 const _ARRIVAL_EPSILON := 0.01
 const _MAX_ITERATIONS_PER_STEP := 64  ## rede de segurança contra dados degenerados (não deveria disparar em uso normal)
 const _DEATH_EFFECT_SCENE := preload("res://scenes/effects/DeathEffect.tscn")
+const _DAMAGE_NUMBER_SCENE := preload("res://scenes/effects/DamageNumber.tscn")
 
 @onready var _visual: AnimatedVisual = $Visual
 
@@ -111,6 +112,8 @@ func take_damage(amount: int) -> void:
 	damaged.emit(self, amount)
 	if _visual != null:
 		_visual.play_state(AnimatedVisual.State.HIT)
+	if is_inside_tree():
+		_spawn_damage_number(amount)
 	if hp <= 0:
 		_die()
 
@@ -136,6 +139,13 @@ func _spawn_death_effect() -> void:
 	var effect := _DEATH_EFFECT_SCENE.instantiate() as Node2D
 	effect.global_position = global_position
 	get_parent().add_child(effect)
+
+
+func _spawn_damage_number(amount: int) -> void:
+	var number := _DAMAGE_NUMBER_SCENE.instantiate() as DamageNumber
+	number.global_position = global_position + Vector2(0, -8)
+	number.initialize(amount)
+	get_parent().add_child(number)
 
 
 func _process(delta: float) -> void:

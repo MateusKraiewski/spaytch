@@ -91,6 +91,10 @@ sprites. Considerar custo de performance em mobile antes de decidir (ver skill
 Direção provisória: ver [Direção Provisória (Identidade)](#direção-provisória-identidade) acima
 — partículas, impactos, flashes, iluminação leve, screen shake e efeitos de habilidade.
 
+**Implementado (reforço pós Phase 0.6):** números de dano flutuantes (`DamageNumber`) e um
+pequeno recoil/squash nas reações de ataque/dano de `AnimatedVisual` — feedback de combate barato
+(sem partículas, sem shader), pensado para não sobrecarregar leitura do mapa nem custo em mobile.
+
 *TBD — linguagem visual detalhada, orçamento concreto de VFX simultâneos, legibilidade em meio
 a combate intenso.*
 

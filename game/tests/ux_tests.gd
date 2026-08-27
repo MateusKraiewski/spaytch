@@ -26,6 +26,7 @@ func _initialize() -> void:
 	await _test_pause_resume_via_main()
 	await _test_wave_banners_via_main()
 	await _test_dinosaur_button_allows_second_placement()
+	await _test_victory_banner_after_last_wave()
 
 	if _failures == 0:
 		print("[ux_tests] ALL TESTS PASSED")
@@ -185,6 +186,48 @@ func _test_dinosaur_button_allows_second_placement() -> void:
 	placement_controller.on_pointer_pressed(grid.cell_center_world(buildable[1]))
 	_check(dinosaurs.get_child_count() == 2,
 		"deveria ser possível colocar um segundo Dinosaur após reselecionar")
+
+	root.remove_child(main)
+	main.free()
+
+
+## Confirma que a ÚLTIMA wave mostra um banner de conclusão distinto
+## ("VITÓRIA"), não o mesmo texto genérico de "wave complete" das
+## anteriores — sem isso o jogador só via o botão "Iniciar Onda" ficar
+## desabilitado, sem nenhuma explicação de que a campanha (de teste) tinha
+## acabado.
+##
+## Não simula combate real pelas 3 waves (isso dependeria da dificuldade
+## crescente/balance atual — sobreviver às 3 sem perder os 3 ovos não é
+## garantido e não é o que este teste quer verificar). Em vez disso, avança
+## `current_wave_index` direto para a última e emite o sinal real
+## `wave_completed` que `Main._on_wave_completed()` escuta — testa
+## exatamente a decisão de texto (última wave -> banner de vitória), sem
+## depender de quão fácil/difícil o combate real é.
+func _test_victory_banner_after_last_wave() -> void:
+	var main := _load_main()
+	var wave_manager := main.get_node("WaveManager") as WaveManager
+	var hud := main.get_node("HUD") as HUD
+	var banner := hud.get_node("Root/BannerLabel") as Label
+
+	root.add_child(main)
+	await process_frame
+
+	var last_index := wave_manager.waves.size() - 1
+	wave_manager.current_wave_index = last_index
+	_check(not wave_manager.has_next_wave(), "sanity: não deveria haver próxima wave a partir da última")
+
+	wave_manager.wave_completed.emit(last_index, wave_manager.waves[last_index])
+
+	_check(banner.visible and banner.text.contains("VITÓRIA"),
+		"completar a última wave deveria mostrar um banner de vitória, got '%s'" % banner.text)
+
+	# Uma wave que NÃO é a última continua com o banner genérico de sempre —
+	# a distinção é só para o fim real da campanha.
+	wave_manager.current_wave_index = 0
+	wave_manager.wave_completed.emit(0, wave_manager.waves[0])
+	_check(banner.visible and banner.text.contains("COMPLETE") and not banner.text.contains("VITÓRIA"),
+		"wave que não é a última deveria continuar com o banner genérico, got '%s'" % banner.text)
 
 	root.remove_child(main)
 	main.free()

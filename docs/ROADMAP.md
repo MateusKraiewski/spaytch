@@ -280,6 +280,31 @@ de qualquer gameplay.
       novos dinossauros/inimigos, upgrades, tipos de ovo, ou arte/áudio final foi implementada —
       fora de escopo desta fase, conforme planejado
 
+#### Reforço pós Phase 0.6 — feedback visual e de combate
+
+Rodada de hardening sobre o sistema visual já entregue (sem nova numeração de fase — commit
+`8b47669` já fechou a Phase 0.6; isto refina o mesmo sistema).
+
+- [x] `AnimatedVisual`: `stop_loop()`, introspecção `last_state`/`last_loop_state` para testes;
+      HIT ganhou squash de escala além do flash; ATTACK ganhou recoil de posição além do pulso de
+      escala — ambos na trilha de reação já existente, API pública (`play_state`) inalterada
+- [x] `Egg` ganha loop de "vivo" contínuo (IDLE saudável / pulso agitado abaixo de 30% HP),
+      parado (`stop_loop()`) na destruição — antes só reagia no instante do dano, ficando estático
+      entre hits
+- [x] `DamageNumber` (`class_name`, novo): número de dano flutuante autônomo, mesmo padrão de
+      `DeathEffect`; acionado em `BasicEnemy`/`Egg` a cada `take_damage()`
+- [x] `DeathEffect` ganhou `class_name` (consistência com `DamageNumber`)
+- [x] Banner de vitória distinto ("🏆 VITÓRIA!") ao completar a última wave, reaproveitando o
+      sinal `WaveManager.wave_completed` já existente — não é um `GameState` novo
+- [x] Auditoria mobile/HUD/placement/legibilidade contra o pedido desta rodada: nenhuma mudança de
+      código necessária além da já existente (tamanhos de botão, contraste, ausência de
+      dependência de hover já atendiam)
+- [x] Testes expandidos: `animated_visual_tests.gd`, `egg_tests.gd`, `combat_integration_tests.gd`,
+      `ux_tests.gd` — 44 scripts, 16 suítes, `run_tests.ps1` + `--quit-after N` (MainMenu e
+      Main.tscn) + `--editor --quit` limpos
+- [ ] Teste manual interativo real no editor Godot ainda não foi realizado (mesma limitação já
+      registrada na Phase 0.6)
+
 ## Phase 1 — Core Prototype
 
 **Objetivo:** protótipo jogável mínimo validando o core loop (uma torre, um inimigo, um

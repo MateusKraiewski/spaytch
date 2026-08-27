@@ -24,6 +24,9 @@ func _initialize() -> void:
 	_test_egg_manager_all_destroyed_true_when_all_dead()
 	_test_egg_manager_enemy_reached_nest_damages_next_egg()
 
+	await _test_egg_visual_loop_state_healthy_vs_critical()
+	await _test_egg_visual_loop_stops_when_destroyed()
+
 	for obj in _to_free:
 		if is_instance_valid(obj):
 			obj.free()
@@ -184,3 +187,44 @@ func _test_egg_manager_enemy_reached_nest_damages_next_egg() -> void:
 
 	_check(egg.hp == initial_hp - 7,
 		"egg should take enemy.egg_damage when enemy reaches the nest, got %d" % egg.hp)
+
+
+# ---- Visual: loop de "vivo" (saudável/crítico/destruído) ----
+# Precisa de uma árvore de verdade (create_tween() de AnimatedVisual exige
+# SceneTree válida) — diferente dos testes acima, que usam Egg.new() solto.
+
+func _make_egg_in_tree(max_hp: int) -> Egg:
+	var packed := load("res://scenes/eggs/Egg.tscn") as PackedScene
+	var egg := packed.instantiate() as Egg
+	egg.max_hp = max_hp
+	root.add_child(egg)
+	return _track(egg) as Egg
+
+
+func _test_egg_visual_loop_state_healthy_vs_critical() -> void:
+	var egg := _make_egg_in_tree(100)
+	await process_frame
+	egg.initialize(Vector2i.ZERO)
+
+	_check(egg._visual.last_loop_state == AnimatedVisual.State.IDLE,
+		"ovo saudável deveria manter o loop IDLE, got %s" % egg._visual.last_loop_state)
+
+	egg.take_damage(75)  # 25/100 = 25%, abaixo do limiar crítico (30%)
+	_check(egg._visual.last_loop_state == AnimatedVisual.State.MOVE,
+		"ovo com HP crítico deveria trocar para o loop agitado (MOVE), got %s" % egg._visual.last_loop_state)
+
+	root.remove_child(egg)
+
+
+func _test_egg_visual_loop_stops_when_destroyed() -> void:
+	var egg := _make_egg_in_tree(10)
+	await process_frame
+	egg.initialize(Vector2i.ZERO)
+
+	egg.take_damage(10)  # destrói
+	_check(egg.is_destroyed(), "sanity: ovo deveria estar destruído")
+	var loop_tween: Tween = egg._visual._loop_tween
+	_check(loop_tween == null or not loop_tween.is_valid(),
+		"loop de 'vivo' deveria parar quando o ovo é destruído")
+
+	root.remove_child(egg)

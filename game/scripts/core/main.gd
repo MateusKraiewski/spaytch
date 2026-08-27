@@ -129,7 +129,14 @@ func _on_wave_completed(wave_index: int, wave: WaveDefinition) -> void:
 	if _state == GameState.GAME_OVER:
 		return
 	_set_state(GameState.WAVE_COMPLETE)
-	_hud.show_banner("WAVE %d COMPLETE! +%d coins" % [wave_index + 1, wave.wave_completion_reward])
+	if _wave_manager.has_next_wave():
+		_hud.show_banner("WAVE %d COMPLETE! +%d coins" % [wave_index + 1, wave.wave_completion_reward])
+	else:
+		# Última wave da campanha: feedback distinto de "acabou" em vez do
+		# banner genérico de wave-complete — sem isso o jogador só via o
+		# botão "Iniciar Onda" ficar desabilitado para sempre, sem
+		# explicação nenhuma de que tinha vencido.
+		_hud.show_banner("🏆 VITÓRIA! Todas as ondas superadas! +%d coins" % wave.wave_completion_reward)
 	_update_wave_hud()
 
 

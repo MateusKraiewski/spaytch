@@ -106,6 +106,23 @@ func _initialize() -> void:
 	_check(enemy.is_dead(), "o inimigo deveria morrer pelos disparos do Velociraptor antes de terminar o teste")
 	_check(not enemy.is_finished(), "o inimigo deveria morrer ANTES de alcançar o ninho, não depois")
 
+	# Feedback visual de combate (hardening pós Phase 0.6): cada hit gera um
+	# DamageNumber, e a morte gera um DeathEffect — ambos autônomos,
+	# spawnados como irmãos do inimigo dentro de EnemySpawner (get_parent()).
+	# Como o teste não bombeia frames reais depois do único process_frame
+	# inicial, os timers internos desses efeitos nunca chegam a disparar —
+	# eles continuam presentes como filhos até o fim do teste, o que torna
+	# essa contagem confiável de verificar aqui.
+	var damage_number_count := 0
+	var death_effect_count := 0
+	for child in enemy_spawner.get_children():
+		if child is DamageNumber:
+			damage_number_count += 1
+		elif child is DeathEffect:
+			death_effect_count += 1
+	_check(damage_number_count >= 1, "cada hit deveria ter gerado um DamageNumber, got %d" % damage_number_count)
+	_check(death_effect_count >= 1, "a morte do inimigo deveria ter gerado um DeathEffect, got %d" % death_effect_count)
+
 	_finish()
 
 

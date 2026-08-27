@@ -129,6 +129,157 @@ de qualquer gameplay.
 - [ ] Nenhum sistema de combate, dano, HP de ovos, economia, waves, targeting, torres ou dano foi
       implementado — fora de escopo desta fase, conforme planejado
 
+### Phase 0.4 — Dinosaur/Tower System
+
+- [x] `DinosaurDefinition` (`scripts/dinosaurs/dinosaur_definition.gd`): Resource com
+      display_name, range, attack_interval, damage, projectile_speed, projectile_scene,
+      placeholder_color; sem custo/economia/upgrade/habilidade especial (fora de escopo)
+- [x] `velociraptor.tres`: primeiro (e único) DinosaurDefinition — DPS, alcance médio, ataque
+      rápido, dano baixo/médio, targeting FIRST, sem upgrades/habilidades
+- [x] `Dinosaur` (`scripts/dinosaurs/dinosaur.gd` + `scenes/dinosaurs/Dinosaur.tscn`): runtime
+      genérico (uma cena para qualquer dinossauro futuro), cooldown, pede alvo a `Targeting`,
+      dispara `Projectile`, node `Visual` separado do gameplay para arte futura
+- [x] `Targeting` (`scripts/dinosaurs/targeting.gd`): modo FIRST (maior progresso no MapPath),
+      filtra por alcance no mundo, ignora inimigos mortos/inativos; enum+match, sem Strategy
+      Pattern (explicitamente não criado)
+- [x] `Projectile` (`scripts/combat/projectile.gd` + `scenes/combat/Projectile.tscn`): movimento
+      determinístico via `step(delta)`, homing simples sem predição, sem física/Area2D, aplica
+      dano exatamente uma vez ao impactar, termina sem dano se o alvo sumir/morrer em voo
+- [x] `PlacementController` (`scripts/placement/placement_controller.gd`): máquina de estados
+      IDLE/PLACING, Velociraptor pré-selecionado automaticamente (sem UI de loja/seleção),
+      valida célula (BUILDABLE + livre), instancia Dinosaur, marca `Cell.occupied` (runtime,
+      não MapDefinition); mesmo fluxo para mouse click e touch tap, sem depender de hover
+- [x] `PlacementPreview` (`scripts/placement/placement_preview.gd`): highlight válido/inválido +
+      círculo de alcance aproximado, placeholder simples, só leitura do estado do controller
+- [x] `EnemySpawner` expandido: registro de inimigos ativos (`get_active_enemies()`), sem
+      EnemyRegistry/EnemyManager separado (explicitamente não criado)
+- [x] `BasicEnemy` expandido: `max_hp`/`hp`, `take_damage()`, `is_dead()`, `is_active()`, signal
+      `died`, `get_distance_traveled()` (progresso no caminho, requisito de targeting FIRST) —
+      continua independente de Dinosaur/Targeting
+- [x] `Main.tscn`/`main.gd`: containers neutros `Dinosaurs`/`Projectiles`, wiring de
+      `PlacementController`/`PlacementPreview`, pré-seleção do Velociraptor
+- [x] Dois problemas reais encontrados e corrigidos rodando os testes de verdade: `Projectile`
+      só detectava impacto no `step()` seguinte (não no mesmo, com delta grande); cenas reais
+      instanciadas em testes vazavam RID/CanvasItem sem liberação explícita — ver
+      [ARCHITECTURE.md](ARCHITECTURE.md#phase-04--dinosaurtower-system)
+- [x] Testes determinísticos novos: `dinosaur_definition_tests.gd`, `placement_tests.gd`,
+      `targeting_tests.gd`, `dinosaur_tests.gd`, `projectile_tests.gd`,
+      `combat_integration_tests.gd` (vertical slice completo: placement → targeting → disparo →
+      dano → morte, antes do inimigo alcançar o ninho)
+- [x] `run_tests.ps1` atualizado (11 test suites) e validado limpo: compile-check (28 scripts),
+      todos os testes, `--quit-after 30`, `--editor --quit` — sem SCRIPT ERROR, sem Parse Error,
+      sem warning/erro de vazamento de recurso
+- [x] `docs/ARCHITECTURE.md` atualizado com arquitetura, decisões e limitações reais desta fase
+- [x] `docs/GAME_BIBLE.md` atualizado apenas para registrar que o Velociraptor é o primeiro
+      dinossauro concreto (papel DPS) — sem números de balanceamento (técnicos, ficam em
+      ARCHITECTURE.md)
+- [ ] Nenhuma economia, waves, upgrades, habilidades especiais, UI de seleção/loja, animações
+      finais ou arte final foi implementada — fora de escopo desta fase, conforme planejado
+
+### Phase 0.5 — Primeiro Game Loop Jogável Completo
+
+- [x] `WaveDefinition` (`Resource`) + `WaveManager`: 3 waves (`wave_01/02/03.tres`, 5/8/10
+      inimigos, intervalo 1.0/0.9/0.8s); máquina de estados IDLE/SPAWNING/WAITING_FOR_CLEAR;
+      não permite duas waves simultâneas; conclusão só quando nenhum inimigo spawnado por ela
+      continua ativo; `wave_started`/`wave_completed`; `lock()` para GAME_OVER
+- [x] `EnemySpawner` estendido: `spawn_enemy(speed_override, hp_override)` parametrizado por
+      wave; sinal `enemy_died` (re-emissão); não spawna mais sozinho ao iniciar (spawning agora
+      é exclusivo de `WaveManager`)
+- [x] `Economy` (`Node`): `coins` runtime, `starting_coins` configurável, `can_afford`/`spend`/
+      `add` centralizados, sinal `coins_changed`; sem loja, sem moeda premium, sem persistência
+- [x] `DinosaurDefinition.cost` adicionado; `PlacementController` verifica/desconta coins na
+      confirmação do placement (não durante hover/preview); sem coins suficientes: nada é
+      descontado, nenhum dinossauro é criado, `placement_failed("insufficient_coins")` +
+      log
+- [x] `Egg` (`Node2D`, hp/dano/destruição) + `EggManager`: posições derivadas de
+      `MapDefinition.get_egg_positions()` (não duplicadas); regra determinística de seleção
+      (primeiro ovo vivo, ordem do mapa); inimigo que alcança o ninho causa `egg_damage` e é
+      removido (`queue_free()`, decisão do `EggManager`, não do `BasicEnemy`); sinal
+      `all_eggs_destroyed`
+- [x] `BasicEnemy` estendido: `egg_damage` (dano a ovos), sinal `damaged` — continua
+      independente de `Dinosaur`/`Targeting`/`GameState`/`Economy`
+- [x] Estado da partida (`GameState`: PREPARING/WAVE_ACTIVE/WAVE_COMPLETE/GAME_OVER) controlado
+      por `Main.gd` (composition root), reagindo a sinais reais de `WaveManager`/`EggManager` —
+      sem máquina de estados abstrata separada
+- [x] GAME_OVER quando todos os ovos são destruídos: `WaveManager.lock()` impede spawn/wave
+      novos, `HUD` mostra overlay simples
+- [x] `HUD` (`CanvasLayer`, `scenes/ui/HUD.tscn`): coins, wave atual, status, ovos vivos + HP,
+      botão "Iniciar Onda", feedback de wave complete e game over — placeholders de UI, métodos
+      públicos estáveis para arte final substituir depois; só exibe/encaminha, não decide
+- [x] Pausa via mecanismo nativo do Godot (`get_tree().paused` + `process_mode`): inimigos,
+      projéteis, cooldowns e spawning param sozinhos; só a HUD (`process_mode = ALWAYS`)
+      continua respondendo
+- [x] Velocidade x1/x2 via `Engine.time_scale` (mecanismo nativo do Godot), resetado
+      explicitamente a cada `Main._ready()`
+- [x] Sinais de feedback estabelecidos (não VFX complexos): `BasicEnemy.damaged`,
+      `Dinosaur.fired`, `Projectile.impacted`, `Egg.damaged`/`destroyed`,
+      `WaveManager.wave_started`/`wave_completed` — `Egg`/`BasicEnemy` já reagem com um
+      `modulate` simples; `Dinosaur.fired`/`Projectile.impacted` só o sinal existe ainda
+- [x] Continua PC (mouse) e Android (touch) pelo mesmo `InputManager`, sem sistema de input
+      separado
+- [x] Nenhum autoload/EventBus/Manager global novo; `GridManager`/`InputManager` não sofreram
+      nenhuma alteração nesta fase
+- [x] Testes novos: `economy_tests.gd`, `egg_tests.gd`, `wave_tests.gd`,
+      `game_loop_integration_tests.gd` (loop completo + cenário de dano ao ovo); `placement_tests.gd`
+      expandido (custo); `enemy_tests.gd` expandido; `integration_tests.gd`/`combat_integration_tests.gd`
+      ajustados para o novo modelo de spawn (não automático)
+- [x] `run_tests.ps1` (15 test suites, 38 scripts) e validação completa: sem SCRIPT ERROR, sem
+      Parse Error, sem warning/erro de vazamento de recurso, `--quit-after 30` e `--editor --quit`
+      limpos
+- [x] `docs/ARCHITECTURE.md` e `docs/GAME_BIBLE.md` atualizados com as decisões reais desta fase
+- [ ] Nenhuma economia premium, loja real, gacha, energia, login/backend, persistência entre
+      sessões, novos dinossauros, ou arte/áudio final foi implementada — fora de escopo desta
+      fase, conforme planejado
+
+### Phase 0.6 — First Playable / UX Pass
+
+- [x] `MainMenu.tscn` (`Control`, `main_menu.gd`) como cena de boot (`project.godot`
+      `run/main_scene`, era `Main.tscn`): título, subtítulo, JOGAR/OPÇÕES/SAIR; JOGAR navega via
+      `get_tree().change_scene_to_file()` nativo, sem framework de cena; sem `GameSession`/
+      autoload (nenhum estado atravessa menu↔jogo); estrutura pronta para uma tela de LOGIN/
+      PERFIL futura sem reestruturar
+- [x] HUD: banner único reutilizável (`show_banner`/`hide_banner`) para "WAVE N" (~1s),
+      "WAVE N COMPLETE! +recompensa" e "Coins insuficientes!"; overlay de pausa (PAUSADO/
+      CONTINUAR/MENU) além do botão compacto existente; `GameOverOverlay` ganhou botão MENU;
+      botão de dinossauro permite recolocar o Velociraptor (mais de um por partida); rótulos com
+      emoji + texto (🥚/💰/🦖), fallback textual caso o glyph não renderize; botões maiores para
+      toque
+- [x] Placement UX: `PlacementController.can_afford_selected()` + terceira cor (âmbar) na preview
+      para "válido mas sem coins" durante o hover, não só no clique; silhueta translúcida do
+      dinossauro desenhada na preview (não só um retângulo); sinal `dinosaur_placed`
+- [x] **Arquitetura de animação (`AnimatedVisual`, `class_name`, `scripts/visuals/`):** todo
+      `Dinosaur`/`BasicEnemy`/`Egg`/`Projectile` ganhou um node `Visual` com este componente
+      compartilhado — gameplay só chama `play_state(IDLE/MOVE/ATTACK/HIT/DEATH)`, nunca manipula
+      `Tween`/`AnimatedSprite2D` diretamente. Hoje realizado via `Tween` procedural (sem arte
+      final); pronto para um `AnimatedSprite2D`+`SpriteFrames` real substituir o fallback sem
+      mudar código de gameplay. `DeathEffect` (efeito visual autônomo, nunca atrasa o
+      `queue_free()` real da entidade) cobre morte, chegada ao ninho e impacto de projétil
+- [x] Placeholder visual do Dinosaur trocado (triângulo → silhueta de 6 pontos);
+      `DinosaurDefinition.placeholder_color` finalmente conectado (campo existia desde a Phase
+      0.4 sem efeito); cor trocada para laranja (contraste contra o debug de células BUILDABLE)
+- [x] Ganchos de áudio documentados (click/placement/shot/hit/death/wave start/wave complete/egg
+      hit/game over → sinais existentes) — nenhum placeholder sonoro criado (sem asset de áudio
+      no projeto ainda)
+- [x] Testes novos: `ux_tests.gd` (Main Menu, API pública da HUD, pausa/resume/menu, banners de
+      wave, segundo placement via botão), `animated_visual_tests.gd` (fallback procedural,
+      `set_base_modulate`, delegação para `AnimatedSprite2D` quando disponível);
+      `placement_tests.gd` expandido (`dinosaur_placed`, `can_afford_selected`)
+- [x] Bug real pré-existente encontrado e corrigido: `placement_preview.gd` usava
+      `PackedVector2Array([...])` como valor de `const` (não é expressão constante válida em
+      GDScript), quebrando a compilação de `main.gd` por cascata — só detectado ao rodar
+      `run_tests.ps1` de verdade
+- [x] `run_tests.ps1` (16 test suites, 43 scripts) e validação completa: sem SCRIPT ERROR, sem
+      Parse Error, sem warning/erro de vazamento de recurso; `--quit-after N` limpo tanto em
+      `MainMenu.tscn` quanto em `Main.tscn`; `--editor --quit` limpo
+- [x] `docs/ARCHITECTURE.md` atualizado com as decisões reais desta fase
+- [ ] **Teste manual interativo real no editor Godot não foi realizado** — sem loop de
+      interação visual/mouse/teclado disponível nesta sessão; validação ficou limitada a
+      headless (compile-check, testes automatizados, `--quit-after N`, scan do editor). Ver
+      relatório da fase para o detalhamento honesto desta limitação
+- [ ] Nenhuma economia premium, loja real, login/autenticação real, persistência entre sessões,
+      novos dinossauros/inimigos, upgrades, tipos de ovo, ou arte/áudio final foi implementada —
+      fora de escopo desta fase, conforme planejado
+
 ## Phase 1 — Core Prototype
 
 **Objetivo:** protótipo jogável mínimo validando o core loop (uma torre, um inimigo, um

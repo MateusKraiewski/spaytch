@@ -4,13 +4,27 @@ Documento técnico vivo. Descreve a arquitetura do projeto conforme ela existe e
 Este documento é **descritivo do estado real do código**, não um plano aspiracional — atualize-o
 quando a arquitetura mudar de fato.
 
-> Status: **Phase 0.3 — Path System + primeiro inimigo + movimento, concluída e validada em
-> Godot 4.7.2.** Além da fundação (Phase 0.1) e do primeiro mapa (Phase 0.2), o projeto agora
-> converte o PATH do mapa em uma sequência ordenada de waypoints (`MapPath`, path following, não
-> pathfinding), spawna um `BasicEnemy` placeholder que percorre esse caminho de SPAWN a NEST de
-> forma independente de FPS, e emite um sinal ao chegar. Nenhum sistema de combate, economia,
-> waves, targeting, torres ou dano existe ainda. Seções abaixo descrevem o que existe de fato; o
-> que ainda não existe permanece `TBD`.
+> Status: **Phase 0.6 — First Playable / UX Pass, concluída e validada em Godot 4.7.2.** Além do
+> game loop completo (0.5), o jogo agora tem um fluxo de apresentação real: `MainMenu.tscn`
+> (título, subtítulo, JOGAR/OPÇÕES/SAIR) é a cena de boot (`project.godot` `run/main_scene`);
+> JOGAR navega para `Main.tscn` (o jogo em si) via `get_tree().change_scene_to_file()` nativo —
+> sem framework de cena, sem `GameSession` (não necessário: nenhum estado é compartilhado entre
+> menu e jogo). A HUD ganhou um banner reutilizável (`show_banner`/`hide_banner`) para "WAVE N",
+> "WAVE N COMPLETE! +recompensa" e "Coins insuficientes!"; um overlay de pausa (`PAUSADO` /
+> `CONTINUAR` / `MENU`, o último retorna ao Main Menu descartando a partida); um botão para
+> reselecionar o Velociraptor (agora é possível colocar mais de um por partida); e rótulos com
+> emoji + texto (🥚/💰/🦖) mantendo um fallback textual caso o glyph não renderize. **Toda
+> apresentação visual passou a ser desacoplada de gameplay via `AnimatedVisual`** (ver
+> [AnimatedVisual e DeathEffect](#animatedvisual-e-deatheffect-phase-06)): cada entidade
+> (`Dinosaur`/`BasicEnemy`/`Egg`/`Projectile`) reage a 5 estados padronizados
+> (IDLE/MOVE/ATTACK/HIT/DEATH) através de um componente único, realizado hoje via `Tween`
+> procedural (sem arte final) e pronto para um `AnimatedSprite2D` real no futuro sem mudar código
+> de gameplay; morte/chegada ao ninho/impacto ganharam um efeito visual desacoplado
+> (`DeathEffect`) que nunca atrasa a remoção real da entidade. O placeholder do Dinosaur trocou de
+> um triângulo simples para uma silhueta de 6 pontos, com `DinosaurDefinition.placeholder_color`
+> agora realmente aplicado (era um campo preparado mas não usado desde a Phase 0.4). Sem economia
+> premium, loja, login real, persistência, novos dinossauros/inimigos, upgrades ou multiplayer.
+> Seções abaixo descrevem o que existe de fato; o que ainda não existe permanece `TBD`.
 
 ---
 
@@ -87,12 +101,15 @@ Padrão adotado nesta fase:
 
 ```
 game/
-├── project.godot
+├── project.godot               # run/main_scene = MainMenu.tscn (Phase 0.6; era Main.tscn)
 ├── scenes/
-│   └── Main.tscn
+│   ├── MainMenu.tscn            # cena de boot — título/subtítulo/JOGAR/OPÇÕES/SAIR
+│   └── Main.tscn                # cena de jogo — não é mais a cena de entrada do projeto
 ├── scripts/
 │   ├── core/
-│   │   └── main.gd            # composition root da cena principal
+│   │   └── main.gd            # composition root da cena de jogo
+│   ├── menu/
+│   │   └── main_menu.gd        # navegação do Main Menu, nenhuma lógica de jogo
 │   ├── map/
 │   │   ├── cell_type.gd        # enum CellType (class_name global)
 │   │   ├── cell.gd             # estado runtime de uma célula
@@ -103,23 +120,63 @@ game/
 │   │   └── map_path.gd         # PATH -> sequência ordenada de waypoints (RefCounted, testável)
 │   ├── input/
 │   │   └── input_manager.gd    # normalização mouse/touch → sinais de ponteiro
-│   └── enemies/
-│       ├── basic_enemy.gd      # movimento (path following) de um inimigo, Node2D
-│       └── enemy_spawner.gd    # cria BasicEnemy a partir de Grid+MapPath, Node
+│   ├── enemies/
+│   │   ├── basic_enemy.gd      # movimento + HP/dano/morte de um inimigo, Node2D
+│   │   └── enemy_spawner.gd    # cria BasicEnemy a partir de Grid+MapPath; registro de ativos, Node
+│   ├── dinosaurs/
+│   │   ├── dinosaur_definition.gd  # Resource: dados estáticos de um dinossauro
+│   │   ├── dinosaur.gd             # runtime genérico: cooldown/targeting/disparo, Node2D
+│   │   └── targeting.gd            # seleção de alvo (modo FIRST), RefCounted estático
+│   ├── combat/
+│   │   └── projectile.gd       # movimento determinístico + dano ao impacto, Node2D
+│   ├── placement/
+│   │   ├── placement_controller.gd  # máquina de estados IDLE/PLACING, valida/custa/instancia, Node
+│   │   └── placement_preview.gd     # highlight válido/inválido + círculo de alcance, Node2D
+│   ├── economy/
+│   │   └── economy.gd          # coins de partida — gastar/ganhar, Node
+│   ├── waves/
+│   │   ├── wave_definition.gd  # Resource: dados estáticos de uma onda
+│   │   └── wave_manager.gd     # orquestra spawning ao longo do tempo, Node
+│   ├── eggs/
+│   │   ├── egg.gd              # runtime de um ovo: hp/dano/destruição, Node2D
+│   │   └── egg_manager.gd      # cria Egg a partir do mapa, aplica dano ao alcançar o ninho, Node
+│   ├── visuals/
+│   │   ├── animated_visual.gd  # Phase 0.6: play_state(IDLE/MOVE/ATTACK/HIT/DEATH), Node2D
+│   │   └── death_effect.gd     # Phase 0.6: efeito visual autônomo de morte/impacto, Node2D
+│   └── ui/
+│       └── hud.gd              # HUD: só exibe e encaminha input, CanvasLayer
 ├── data/
 │   ├── maps/
-│   │   └── vale_dos_ovos.tres  # único mapa JOGÁVEL (Phase 0.2), carregado por Main.tscn
-│   └── test/
-│       └── test_map.tres       # fixture de teste (Phase 0.1) — não é mais mapa jogável
+│   │   └── vale_dos_ovos.tres  # único mapa JOGÁVEL, carregado por Main.tscn
+│   ├── test/
+│   │   └── test_map.tres       # fixture de teste (Phase 0.1) — não é mais mapa jogável
+│   ├── dinosaurs/
+│   │   └── velociraptor.tres   # único DinosaurDefinition desta fase
+│   └── waves/
+│       ├── wave_01.tres        # 5 inimigos, intervalo 1.0s
+│       ├── wave_02.tres        # 8 inimigos, intervalo 0.9s
+│       └── wave_03.tres        # 10 inimigos, intervalo 0.8s, hp_override 25
 ├── assets/                     # vazio nesta fase (sem arte final ainda)
-├── ui/                         # vazio nesta fase (sem UI ainda)
+├── ui/                         # vazio — HUD.tscn vive em scenes/ui/, não aqui (ver Cenas)
 └── tests/
-    ├── grid_tests.gd           # testes headless da lógica pura de Grid/MapDefinition
-    ├── map_tests.gd            # testes headless de MapValidator + do mapa Vale dos Ovos
-    ├── path_tests.gd           # testes headless de MapPath (ordenação, rejeição de dados impossíveis)
-    ├── enemy_tests.gd          # testes headless de movimento de BasicEnemy (step() puro)
-    ├── integration_tests.gd    # teste de integração: Main.tscn real, ponta a ponta
-    └── run_tests.ps1           # orquestra refresh de cache + compile-check + testes (ver Phase 0.2.1/0.3)
+    ├── grid_tests.gd                  # testes headless da lógica pura de Grid/MapDefinition
+    ├── map_tests.gd                   # testes headless de MapValidator + do mapa Vale dos Ovos
+    ├── path_tests.gd                  # testes headless de MapPath (ordenação, rejeição de dados impossíveis)
+    ├── enemy_tests.gd                 # movimento + HP/dano/morte/progresso de BasicEnemy (step() puro)
+    ├── integration_tests.gd           # Main.tscn real, path following ponta a ponta (spawn manual)
+    ├── dinosaur_definition_tests.gd   # campos válidos do Velociraptor real
+    ├── placement_tests.gd             # validade de célula + efeito real do placement + custo/economia
+    ├── targeting_tests.gd             # seleção FIRST, alcance, inimigo morto/terminado
+    ├── dinosaur_tests.gd              # seleção de alvo, cooldown, disparo (step() puro)
+    ├── projectile_tests.gd            # movimento, impacto, dano, alvo inválido/morto (step() puro)
+    ├── combat_integration_tests.gd    # Main.tscn real, combate ponta a ponta (spawn manual)
+    ├── economy_tests.gd               # coins, can_afford, spend, add, sinal coins_changed
+    ├── egg_tests.gd                   # Egg (hp/dano/destruição) + EggManager (derivação, seleção, sinais)
+    ├── wave_tests.gd                  # WaveManager: início, contagem de spawn, conclusão, recompensas, lock
+    ├── game_loop_integration_tests.gd # Main.tscn real: loop completo + cenário de dano ao ovo
+    ├── ux_tests.gd                    # Phase 0.6: MainMenu carrega, API pública da HUD, pausa/resume/menu e banners de wave via Main.tscn real
+    ├── animated_visual_tests.gd       # Phase 0.6: AnimatedVisual — fallback procedural, set_base_modulate, delegação p/ AnimatedSprite2D
+    └── run_tests.ps1                  # orquestra refresh de cache + compile-check + testes
 ```
 
 `data/maps/` guarda mapas jogáveis; `data/test/` guarda fixtures de dado usadas só por testes —
@@ -132,42 +189,160 @@ em `scripts/`, seguindo convenção comum e atendendo ao requisito de testes da 
 
 ## Cenas (Scenes)
 
-Duas cenas existem: `scenes/Main.tscn` e `scenes/enemies/BasicEnemy.tscn`. Hierarquia de `Main`:
+Oito cenas existem: `scenes/MainMenu.tscn` (Phase 0.6), `scenes/Main.tscn`,
+`scenes/enemies/BasicEnemy.tscn`, `scenes/dinosaurs/Dinosaur.tscn`, `scenes/combat/Projectile.tscn`,
+`scenes/eggs/Egg.tscn`, `scenes/effects/DeathEffect.tscn` (Phase 0.6) e `scenes/ui/HUD.tscn`.
+
+`scenes/MainMenu.tscn` — cena de boot do projeto (`project.godot` `run/main_scene`), sem nenhuma
+dependência da cena de jogo:
+
+```
+MainMenu (Control, main_menu.gd, tela cheia)
+├── Background (ColorRect)
+├── TitleLabel ("SPAYTCH")
+├── SubtitleLabel ("Ovos de Dinossauro Defense")
+├── PlayButton   ("JOGAR"   -> get_tree().change_scene_to_file("res://scenes/Main.tscn"))
+├── OptionsButton ("OPÇÕES" -> ainda sem tela própria, ver Phase 0.6)
+└── QuitButton   ("SAIR"    -> get_tree().quit())
+```
+
+Hierarquia de `Main` (cena de jogo, instanciada só depois que o jogador aperta JOGAR):
 
 ```
 Main (Node2D, main.gd)
 ├── GridManager (Node2D, grid_manager.gd)
 ├── InputManager (Node, input_manager.gd)
-└── EnemySpawner (Node, enemy_spawner.gd)
-        └── (BasicEnemy instanciado em runtime por spawn_enemy())
+├── EnemySpawner (Node, enemy_spawner.gd)
+│       └── (BasicEnemy instanciado em runtime por spawn_enemy(), chamado por WaveManager)
+├── Dinosaurs (Node2D, sem script)         # container neutro — ver decisão abaixo
+│       └── (Dinosaur instanciado em runtime por PlacementController)
+├── Projectiles (Node2D, sem script)       # container neutro — ver decisão abaixo
+│       └── (Projectile instanciado em runtime por Dinosaur)
+├── PlacementController (Node, placement_controller.gd)
+├── PlacementPreview (Node2D, placement_preview.gd)
+├── Economy (Node, economy.gd)
+├── EggManager (Node, egg_manager.gd)
+│       └── (Egg instanciado em setup(), um por posição EGG do mapa)
+├── WaveManager (Node, wave_manager.gd)
+└── HUD (instância de scenes/ui/HUD.tscn)
 ```
 
-`Main` não contém lógica de grid/input/path/inimigo própria além de: conectar sinais no
-`_ready()`, construir o `MapPath` a partir do `MapDefinition` já carregado por `GridManager`, e
-entregar `Grid` + `MapPath` ao `EnemySpawner` para o spawn inicial (Phase 0.3 — spawn manual
-único, sem wave manager ainda). `GridManager`, `InputManager` e `EnemySpawner` são desacoplados
-entre si; nenhum referencia os outros diretamente — `Main` é o único ponto de wiring
-(*composition root*). Convenção mantida: cenas pequenas, cada responsabilidade em seu próprio
-script.
+`Main` não contém lógica de grid/input/path/inimigo/dinossauro/placement/economia/onda/ovo
+própria além de: conectar sinais no `_ready()`, construir o `MapPath`, ligar `EnemySpawner` (que
+não spawna mais sozinho — ver [WaveManager](#wavemanager)), ligar `EggManager`/`WaveManager`/
+`PlacementController` aos sistemas de que dependem, pré-selecionar o Velociraptor, ligar a `HUD`,
+e controlar o **estado da partida** (`GameState`: `PREPARING`/`WAVE_ACTIVE`/`WAVE_COMPLETE`/
+`GAME_OVER`) reagindo a sinais de `WaveManager`/`EggManager` (ver
+[Gerenciamento de Estado](#gerenciamento-de-estado)). Todos os nodes filhos são mutuamente
+desacoplados; `Main` é o único ponto de wiring (*composition root*).
 
-`scenes/enemies/BasicEnemy.tscn`:
+**`Dinosaurs`/`Projectiles` são containers neutros** (nodes vazios, sem script) em vez de os
+`Dinosaur`/`Projectile` serem filhos de quem os cria (`PlacementController`/`Dinosaur`
+respectivamente): um `Projectile` em voo não deve ser destruído se o `Dinosaur` que o disparou
+for removido no futuro (venda/upgrade, fora de escopo agora, mas a estrutura já não impede isso).
+`Node2D` (não `Node` puro) por convenção — mesmo espírito de `GridManager`, containers de
+entidades 2D — embora um `Node` funcionasse igualmente bem (Godot ignora ancestrais não-`CanvasItem`
+ao compor a transform 2D).
+
+**Desde a Phase 0.6, `Visual` em toda entidade tem o script `animated_visual.gd`** (era um
+`Node2D` neutro até a Phase 0.5) — ver
+[AnimatedVisual e DeathEffect](#animatedvisual-e-deatheffect-phase-06).
+
+`scenes/enemies/BasicEnemy.tscn` (reestruturado na Phase 0.6 — antes não tinha `Visual`, o
+`Placeholder` era filho direto de `BasicEnemy`; alinhado agora com o padrão já usado por
+`Dinosaur`/`Egg`/`Projectile` desde a Phase 0.4/0.5):
 
 ```
 BasicEnemy (Node2D, basic_enemy.gd)
-└── Placeholder (Polygon2D)   # visual TEMPORÁRIO — triângulo laranja, ver Enemies abaixo
+└── Visual (Node2D, animated_visual.gd)
+        └── Placeholder (Polygon2D)   # visual TEMPORÁRIO — triângulo laranja, ver Enemies abaixo
 ```
+
+`scenes/dinosaurs/Dinosaur.tscn`:
+
+```
+Dinosaur (Node2D, dinosaur.gd)
+└── Visual (Node2D, animated_visual.gd)
+        └── Placeholder (Polygon2D)   # TEMPORÁRIO — silhueta de 6 pontos, laranja (Phase 0.6)
+```
+
+Placeholder trocado da Phase 0.5 (triângulo verde) para uma silhueta de 6 pontos (cabeça/costas/
+cauda/barriga/peito, ver `Dinosaur.tscn`) na Phase 0.6 — "mais amigável, mas ainda claramente
+placeholder", sem gerar arte final (requisito explícito). Cor trocada para laranja: o verde
+anterior era próximo demais do tingimento de debug de células `BUILDABLE` na grid (mesma faixa de
+matiz), reduzindo contraste (ver [Hierarquia Visual](#hierarquia-visual-phase-06)).
+
+`scenes/combat/Projectile.tscn`:
+
+```
+Projectile (Node2D, projectile.gd)
+└── Visual (Node2D, animated_visual.gd)
+        └── Placeholder (Polygon2D)   # TEMPORÁRIO — losango amarelo
+```
+
+`scenes/effects/DeathEffect.tscn` (Phase 0.6 — efeito visual autônomo, ver
+[AnimatedVisual e DeathEffect](#animatedvisual-e-deatheffect-phase-06)):
+
+```
+DeathEffect (Node2D, death_effect.gd)
+└── Visual (Node2D, animated_visual.gd)
+        └── Placeholder (Polygon2D)   # TEMPORÁRIO — pequeno losango bege/neutro
+```
+
+`scenes/eggs/Egg.tscn`:
+
+```
+Egg (Node2D, egg.gd)
+└── Visual (Node2D, animated_visual.gd)
+        └── Placeholder (Polygon2D)   # TEMPORÁRIO — hexágono amarelo, escurece com o dano
+```
+
+`scenes/ui/HUD.tscn` — `CanvasLayer` com `process_mode = PROCESS_MODE_ALWAYS` (continua
+respondendo mesmo com `get_tree().paused = true`, ver [Pausa](#pausa-e-velocidade)):
+
+```
+HUD (CanvasLayer, hud.gd, process_mode = ALWAYS)
+└── Root (Control, tela cheia, mouse_filter = IGNORE)
+    ├── EggsLabel / CoinsLabel / WaveLabel / WaveStateLabel (Label, canto superior-esquerdo)
+    ├── PauseButton / SpeedButton (Button, canto superior-direito)
+    ├── DinosaurButton (Button, inferior-esquerdo — reseleciona o Velociraptor)
+    ├── StartWaveButton (Button, inferior-direito)
+    ├── BannerLabel (Label, centro, oculto por padrão — "WAVE N", "WAVE N COMPLETE!
+    │   +recompensa", "Coins insuficientes!"; ver show_banner()/hide_banner())
+    ├── PauseOverlay (Panel, oculto por padrão, bloqueia clique quando visível)
+    │   ├── PausedLabel ("PAUSADO")
+    │   ├── ResumeButton ("▶ CONTINUAR")
+    │   └── PauseMenuButton ("MENU" -> volta ao MainMenu, descarta a partida)
+    └── GameOverOverlay (Panel, oculto por padrão, bloqueia clique quando visível)
+        ├── GameOverLabel ("GAME OVER")
+        └── GameOverMenuButton ("MENU" -> volta ao MainMenu)
+```
+
+Phase 0.6: `WaveCompleteBanner` foi substituído por `BannerLabel`, um único Label reutilizável
+para toda mensagem central temporária (`show_banner(text, auto_hide_after)`/`hide_banner()`) — três
+elementos de UI ad-hoc ("wave iniciou", "wave completou", "coins insuficientes") para a mesma ideia
+("mensagem temporária no centro da tela") seria repetição desnecessária. Rótulos de estado
+permanente ganharam um emoji como prefixo (🥚/💰) com o texto completo ainda presente (`"🥚 Eggs:
+3/3"`, não só `"🥚 3/3"`) — hedge deliberado contra a fonte padrão do Godot não ter cobertura de
+emoji colorido (não verificável sem abrir o editor com uma tela real; se o glyph não renderizar,
+o texto continua claro sozinho).
 
 ## Scripts
 
 - Linguagem: **GDScript** (decisão do escopo desta fase; C# não foi avaliado).
 - Convenção de nomenclatura: `snake_case.gd` para arquivos, `PascalCase` para `class_name`.
 - Classes com `class_name` (`CellType`, `Cell`, `Grid`, `MapDefinition`, `GridManager`,
-  `InputManager`, `MapValidator`, `MapPath`, `BasicEnemy`, `EnemySpawner`) são registradas
-  globalmente pelo Godot e não exigem `preload`/`load` manual — **mas o registro depende de um
-  scan de projeto já ter rodado** (ver limitação documentada na [Phase 0.3](#phase-03--path-system--primeiro-inimigo--movimento) abaixo).
-- Regra aplicada: dado configurável/estático → `Resource` (`MapDefinition`); comportamento e
-  estado runtime → script comum (`Grid`, `Cell`, `GridManager`, `InputManager`, `MapPath`,
-  `BasicEnemy`, `EnemySpawner`).
+  `InputManager`, `MapValidator`, `MapPath`, `BasicEnemy`, `EnemySpawner`, `DinosaurDefinition`,
+  `Dinosaur`, `Targeting`, `Projectile`, `PlacementController`, `PlacementPreview`, `Economy`,
+  `WaveDefinition`, `WaveManager`, `Egg`, `EggManager`, `HUD`, `AnimatedVisual`) são registradas
+  globalmente pelo
+  Godot e não exigem `preload`/`load` manual — **mas o registro depende de um scan de projeto já
+  ter rodado** (ver limitação documentada na
+  [Phase 0.3](#phase-03--path-system--primeiro-inimigo--movimento) abaixo).
+- Regra aplicada: dado configurável/estático → `Resource` (`MapDefinition`, `DinosaurDefinition`,
+  `WaveDefinition`); comportamento e estado runtime → script comum (`Grid`, `Cell`, `GridManager`,
+  `InputManager`, `MapPath`, `BasicEnemy`, `EnemySpawner`, `Dinosaur`, `Targeting`, `Projectile`,
+  `PlacementController`, `PlacementPreview`, `Economy`, `WaveManager`, `Egg`, `EggManager`, `HUD`).
 
 ## Resources
 
@@ -192,6 +367,42 @@ necessidade demonstrada.
 **Importante:** `MapDefinition` não guarda nenhum estado mutável de runtime (ex: "ocupada"). Um
 `Resource` carregado do disco pode ser uma instância compartilhada; mutá-lo em runtime é uma
 armadilha comum no Godot. Estado mutável vive em `Cell`/`Grid` (ver abaixo).
+
+### DinosaurDefinition (`scripts/dinosaurs/dinosaur_definition.gd`)
+
+`Resource` customizado representando a definição **estática e autoral** de um dinossauro
+defensor — mesmo padrão de `MapDefinition`. Campos: `display_name`, `range` (px, mundo),
+`attack_interval` (s, cooldown), `damage` (int), `projectile_speed` (px/s), `projectile_scene`
+(`PackedScene`), `placeholder_color` (reservado, ver [Dinosaur](#dinosaur)).
+
+**Um único `Dinosaur.tscn` genérico consome qualquer instância deste Resource.** Novos
+dinossauros (Triceratops, T-Rex, ...) não exigem cena nem classe novas — só um novo `.tres` —
+enquanto não precisarem de comportamento realmente especial. `velociraptor.tres` é a única
+instância existente nesta fase.
+
+`cost` (int, coins) foi adicionado na Phase 0.5 junto com a economia — antes disso não fazia
+sentido existir sem nenhum sistema para consumi-lo (ver [Economy](#economy)).
+
+**Deliberadamente sem** upgrades, habilidade especial, ícone de UI. Nenhum sistema existe ainda
+para consumir esses campos.
+
+Sem `DinosaurValidator` dedicado (diferente de `MapValidator`): campos escalares simples cabem
+em asserts diretos nos testes (`dinosaur_definition_tests.gd`) — a topologia de mapa validada por
+`MapValidator` é genuinamente algorítmica; validar "6 números positivos" não justifica uma classe
+separada.
+
+### WaveDefinition (`scripts/waves/wave_definition.gd`)
+
+`Resource` customizado representando a definição **estática e autoral** de uma onda de
+inimigos — mesmo padrão de `MapDefinition`/`DinosaurDefinition`. Campos: `enemy_count`,
+`spawn_interval` (s), `reward_per_kill` (coins), `wave_completion_reward` (coins),
+`speed_override`/`hp_override` (`<= 0` = "usar o default do `BasicEnemy.tscn`").
+
+**Deliberadamente simples, não um sistema genérico de "wave scripting"** (múltiplos grupos de
+inimigos por onda, timings compostos, eventos no meio da onda): uma wave = N inimigos do mesmo
+tipo, a um intervalo fixo. `wave_01.tres`/`wave_02.tres`/`wave_03.tres` são as três instâncias
+desta fase, carregadas por `Main.gd` (ver [Decisões — Phase 0.5](#decisões-técnicas--phase-05)
+sobre por quê via código e não via export no `.tscn`).
 
 ### Fixture de teste (`data/test/test_map.tres`)
 
@@ -244,8 +455,9 @@ buildable, escolha das curvas do caminho — estão registradas em
 
 ## Sistemas
 
-Nesta fase existem o **sistema de grid**, a **validação de mapa**, o **sistema de path** e o
-**primeiro inimigo**:
+Nesta fase existem o **sistema de grid**, a **validação de mapa**, o **sistema de path**, o
+**inimigo**, o **sistema de dinossauros/torres**, o **combate**, o **placement**, a **economia**,
+as **ondas** e os **ovos**:
 
 | Camada | Arquivo | Tipo | Responsabilidade |
 |---|---|---|---|
@@ -255,10 +467,306 @@ Nesta fase existem o **sistema de grid**, a **validação de mapa**, o **sistema
 | Apresentação/Node | `grid_manager.gd` | `Node2D` | Constrói o `Grid` a partir do `MapDefinition` (após validar), desenha visual de debug, resolve posição de ponteiro → célula |
 | Input | `input_manager.gd` | `Node` | Normaliza mouse/touch em sinais `pointer_moved` / `pointer_pressed` |
 | Path | `map_path.gd` | `RefCounted` (fábrica estática) | Converte as células PATH de um `MapDefinition` em uma sequência ordenada de waypoints (ver [MapPath](#mappath--path-following)) |
-| Inimigo | `basic_enemy.gd` | `Node2D` | Percorre uma lista de waypoints em espaço de mundo, independente de FPS (ver [BasicEnemy e EnemySpawner](#basicenemy-e-enemyspawner)) |
-| Spawn | `enemy_spawner.gd` | `Node` | Cria um `BasicEnemy`, converte waypoints de grid para mundo via `Grid`, inicia o movimento |
+| Inimigo | `basic_enemy.gd` | `Node2D` | Percorre waypoints, HP/dano/morte, expõe progresso no caminho (ver [BasicEnemy e EnemySpawner](#basicenemy-e-enemyspawner)) |
+| Spawn/registro | `enemy_spawner.gd` | `Node` | Cria `BasicEnemy` sob demanda, converte waypoints para mundo, mantém registro dos inimigos ativos |
+| Dado estático | `dinosaur_definition.gd` | `Resource` | Definição autoral de um dinossauro (ver [DinosaurDefinition](#dinosaurdefinition-scriptsdinosaursdinosaur_definitiongd)) |
+| Dinossauro | `dinosaur.gd` | `Node2D` | Cooldown, pede alvo a `Targeting`, dispara `Projectile` (ver [Dinosaur](#dinosaur)) |
+| Targeting | `targeting.gd` | `RefCounted` (funções estáticas) | Seleciona alvo entre candidatos por alcance + modo (ver [Targeting](#targeting)) |
+| Combate | `projectile.gd` | `Node2D` | Movimento determinístico até o alvo + dano ao impacto (ver [Projectile](#projectile)) |
+| Placement | `placement_controller.gd` | `Node` | Máquina de estados IDLE/PLACING, valida célula, verifica/desconta custo, instancia `Dinosaur`, marca ocupação (ver [PlacementController](#placementcontroller)) |
+| Preview | `placement_preview.gd` | `Node2D` | Desenha highlight de validade + alcance aproximado, sem decidir nada (ver [PlacementPreview](#placementpreview)) |
+| Dado estático | `wave_definition.gd` | `Resource` | Definição autoral de uma onda (ver [WaveDefinition](#wavedefinition-scriptswaveswave_definitiongd)) |
+| Economia | `economy.gd` | `Node` | `coins` de partida — `can_afford`/`spend`/`add` centralizados (ver [Economy](#economy)) |
+| Ondas | `wave_manager.gd` | `Node` | Orquestra spawning ao longo do tempo, detecta conclusão, concede recompensas (ver [WaveManager](#wavemanager)) |
+| Ovo | `egg.gd` | `Node2D` | HP/dano/destruição de um ovo (ver [Egg e EggManager](#egg-e-eggmanager)) |
+| Registro de ovos | `egg_manager.gd` | `Node` | Cria `Egg` a partir do mapa, aplica dano ao ovo seguinte quando um inimigo alcança o ninho |
+| UI | `hud.gd` | `CanvasLayer` | Exibe estado da partida, encaminha input do jogador via sinais (ver [HUD](#hud)) |
+| Menu | `main_menu.gd` | `Control` | Cena de boot: título/JOGAR/OPÇÕES/SAIR, navega para `Main.tscn` |
+| Apresentação | `animated_visual.gd` | `Node2D` | Estados IDLE/MOVE/ATTACK/HIT/DEATH desacoplados de gameplay (ver [AnimatedVisual](#animatedvisual-e-deatheffect-phase-06)) |
+| Efeito | `death_effect.gd` | `Node2D` | Feedback visual autônomo de morte/chegada/impacto, independente do `queue_free()` da entidade |
 
-Nenhum sistema de combate, economia, waves, upgrades ou targeting existe ainda.
+Nenhuma economia premium, loja, login/conta real, persistência entre sessões, ou arte/áudio final
+existe ainda.
+
+### Targeting
+
+`scripts/dinosaurs/targeting.gd` — funções estáticas, puramente funcionais: recebe candidatos +
+origem + alcance, devolve um alvo (ou `null`). Não conhece `Dinosaur`, não dispara nada, não sabe
+de projétil.
+
+**Só o modo `FIRST` está implementado** (`enum Mode { FIRST }`): entre os candidatos dentro do
+alcance (`origin.distance_to(enemy.position) <= range`, distância no mundo — requisito 8) e
+ativos (`enemy.is_active()`), seleciona o de maior `BasicEnemy.get_distance_traveled()` — maior
+progresso no `MapPath`, não o fisicamente mais próximo do dinossauro.
+
+**Enum + `match` em vez de Strategy Pattern:** com um único modo implementado, uma hierarquia de
+classes (`TargetingStrategy` → `FirstTargetingStrategy` → ...) seria abstração prematura.
+Adicionar `LAST`/`CLOSEST`/`STRONGEST`/`WEAKEST` no futuro é só mais um `case` no `match` — a
+extensibilidade já está satisfeita sem esse custo.
+
+### Dinosaur
+
+`scripts/dinosaurs/dinosaur.gd`, `Node2D` — runtime **genérico**: a mesma cena/script serve
+qualquer tipo de dinossauro; a diferenciação vem inteiramente de `DinosaurDefinition` (dado), não
+de subclasses.
+
+- `step(delta)` (chamado por `_process`, e diretamente pelos testes — mesmo padrão de
+  `BasicEnemy`/`Projectile`): decrementa cooldown; se não há alvo válido (`null`, inválido,
+  inativo, ou fora de alcance), pede um novo a `Targeting`; se há alvo e cooldown zerado, dispara.
+- Mantém o **mesmo alvo** enquanto ele continuar válido, em vez de re-consultar `Targeting` a
+  cada frame — evita flicker de alvo e é mais barato (busca linear O(dinossauros × inimigos),
+  aceitável no tamanho atual do jogo — requisito 15).
+- `_fire()`: instancia `definition.projectile_scene`, adiciona ao container `Projectiles`
+  (**não** como filho do próprio `Dinosaur` — ver [Cenas](#cenas-scenes)), chama
+  `projectile.initialize(alvo, dano, velocidade)`, reseta o cooldown. Não implementa nenhuma
+  lógica de movimento/impacto de projétil.
+- `current_target()` público, só para inspeção/teste — não é usado por nenhum outro sistema
+  ainda.
+- `signal fired(dinosaur, projectile)` (Phase 0.5) — gancho para feedback visual; consumido pela
+  primeira vez na Phase 0.6 (ver abaixo).
+- **Visual separado (`Visual`):** `Dinosaur.tscn` tem uma subárvore `Visual` dedicada (placeholder
+  `Polygon2D` hoje) — a lógica de gameplay não sabe nada sobre o CONTEÚDO da apresentação (forma,
+  número de nodes internos).
+- **`placeholder_color` conectado (Phase 0.6):** `setup()` agora tinge `$Visual.modulate` com
+  `definition.placeholder_color`. Revisão da decisão da Phase 0.4 (que deixava isso deliberadamente
+  desconectado por medo de acoplar `dinosaur.gd` a "Visual contém um Polygon2D"): `modulate` é
+  propriedade genérica de qualquer `CanvasItem`, então tingir `$Visual` (o node container, não o
+  `Polygon2D` dentro dele) não cria essa dependência — continua funcionando sem nenhuma mudança no
+  dia em que `Visual` virar um `Sprite2D`/`AnimatedSprite2D` com arte final.
+- **Feedback de disparo (Phase 0.6):** `_fire()` chama `_play_fire_pulse()` — um pequeno pulso de
+  `scale` em `$Visual` via `Tween`, revertendo sozinho (~0.12s). Guardado por `is_inside_tree()`:
+  `create_tween()` exige uma `SceneTree` válida, e vários testes de `dinosaur_tests.gd` instanciam
+  `Dinosaur.new()` sem `add_child()` — sem essa guarda, todo teste que chama `_fire()`
+  indiretamente (via `step()`) quebraria.
+
+### Projectile
+
+`scripts/combat/projectile.gd`, `Node2D` — entidade de combate **separada** do `Dinosaur`; não
+conhece cooldown nem targeting, só sabe perseguir um alvo e aplicar dano.
+
+- **Sem física, sem `Area2D`:** movimento determinístico igual a `BasicEnemy`/`Dinosaur`
+  (`step(delta)` público); "impacto" é uma checagem de distância (`distância ≤ quanto o projétil
+  pode se mover neste passo`), não colisão real.
+- **Homing simples, sem predição de mira:** persegue a posição *atual* do alvo a cada passo — não
+  calcula onde o alvo estará (exigiria conhecer velocidade/trajetória futura do inimigo,
+  complexidade não necessária para este vertical slice).
+- Alvo inválido (`not is_instance_valid`) ou inativo (`not is_active()` — morto ou já chegou ao
+  ninho) a qualquer momento do voo: o projétil se autodestrói **sem** causar dano ("miss"
+  silencioso), sem tentar acessar um Node possivelmente já liberado.
+- `_MAX_LIFETIME` (5s): rede de segurança defensiva contra dados degenerados — não deveria ser
+  atingida em uso normal.
+- `signal impacted(projectile, target)` (Phase 0.5) — gancho para feedback visual, emitido só em
+  acerto real (não em "miss"), logo antes de `_target.take_damage()`.
+- **Feedback de impacto (Phase 0.6):** em vez de reagir ao próprio `impacted` com um efeito
+  separado, o "impacto" reaproveita o flash de dano do próprio `BasicEnemy` (ver
+  [BasicEnemy e EnemySpawner](#basicenemy-e-enemyspawner)) — o impacto É o que causa o dano, então
+  um efeito distinto seria redundante. O `Projectile` em si ganha só um "pop" instantâneo de
+  `scale` (sem `Tween`, um único `set()`) no frame em que se destrói, guardado por
+  `is_inside_tree()`.
+
+**Bug real encontrado e corrigido nesta fase** (ver
+[Phase 0.4](#phase-04--dinosaurtower-system) abaixo): a checagem de "chegou perto o suficiente"
+comparava contra um epsilon fixo pequeno em vez de contra `speed * delta` (quanto o projétil pode
+efetivamente se mover naquele passo) — com um único `step()` de delta grande o bastante para
+cobrir toda a distância até o alvo, o impacto (e o dano) só era detectado no **próximo** `step()`,
+não no mesmo. Corrigido comparando contra `speed * delta + epsilon`, igual ao critério de
+chegada já usado em `BasicEnemy`.
+
+### PlacementController
+
+`scripts/placement/placement_controller.gd`, `Node` — máquina de estados simples:
+
+```
+IDLE ──select_dinosaur(definition)──► PLACING ──clique/toque em célula válida──► (coloca) ──► IDLE
+```
+
+- **`IDLE`**: nenhum dinossauro selecionado; input de placement ignorado.
+- **`PLACING`**: um `DinosaurDefinition` está selecionado; hover (PC) atualiza estado de preview;
+  um clique/toque em célula válida coloca o dinossauro e volta para `IDLE`; em célula inválida,
+  **permanece em `PLACING`** para permitir nova tentativa (decisão não especificada
+  explicitamente — ver [Decisões — Phase 0.4](#decisões-técnicas--phase-04)).
+- **Sem UI de seleção de dinossauro nesta fase.** `initial_definition` (`@export`) permite
+  pré-selecionar o Velociraptor automaticamente em `Main._ready()`, simulando "o jogador já
+  escolheu". `select_dinosaur(definition)` é o único ponto de entrada para trocar a seleção —
+  genérico o suficiente para uma UI futura chamar com qualquer `DinosaurDefinition`, sem exigir
+  nenhuma mudança nesta classe (requisito: arquitetura preparada para múltiplos dinossauros
+  selecionáveis).
+- **Validade de célula (`is_valid_placement`, público):** `grid.is_in_bounds(coord) and
+  cell.is_buildable() and not cell.occupied`. PATH/SPAWN/NEST/EGG/OBSTACLE já excluídos por
+  `is_buildable()`. Célula ocupada continua pertencendo ao **runtime** `Cell.occupied`
+  (`Grid`/`Cell`), nunca a `MapDefinition` — `Cell.occupied` já existia desde a Phase 0.1
+  (comentário previa exatamente este uso futuro) e ganha aqui seu primeiro consumidor real.
+  `Cell.occupied` **nunca volta a `false`** nesta fase — não existe mecânica de remover/vender um
+  dinossauro ainda.
+- **Zero mudanças em `GridManager`** para esta fase: `PlacementController` recebe o `Grid` já
+  construído via `setup()` (mesmo padrão de `EnemySpawner`), não precisa de nenhuma API nova de
+  `GridManager`.
+- **Nenhuma lógica de combate aqui** — cooldown, targeting e disparo vivem inteiramente em
+  `Dinosaur`/`Targeting`/`Projectile`.
+- PC e Android compartilham exatamente o mesmo fluxo: `on_pointer_pressed` (clique ou toque, via
+  `InputManager` já existente, sem nenhuma mudança nele) confirma o placement. Hover
+  (`on_pointer_moved`) só atualiza o estado de preview visual — nunca é exigido para confirmar
+  (requisito Android: não depender de hover para gameplay).
+- **Custo (Phase 0.5):** a checagem de coins acontece **só na confirmação** (`on_pointer_pressed`),
+  não durante o hover/preview — a validade de célula (verde/vermelho) reflete só BUILDABLE+livre,
+  nunca capacidade de pagar; essa ordem (célula válida → confirmar → verificar coins → descontar)
+  é a mesma da especificação. Sem coins suficientes: nada é descontado, nenhum `Dinosaur` é
+  instanciado, o controller permanece em `PLACING`, e `placement_failed("insufficient_coins")` é
+  emitido (mais um `print()` de log) — a HUD reage a esse sinal mostrando um banner (ver
+  [HUD](#hud)).
+- **`signal dinosaur_placed(dinosaur, coord)` (Phase 0.6):** emitido em `_place_dinosaur()`, depois
+  que o dinossauro já existe e a célula já está ocupada — gancho de feedback (visual/áudio) para um
+  placement bem-sucedido, sem nenhum consumidor obrigatório ainda.
+- **`can_afford_selected() -> bool` (Phase 0.6):** consulta pura (mesmo espírito de
+  `is_valid_placement()`) usada por `PlacementPreview` para colorir a célula de hover como
+  "válida mas sem coins suficientes" **antes** do jogador tentar confirmar, não só no clique.
+
+### PlacementPreview
+
+`scripts/placement/placement_preview.gd`, `Node2D` — só desenha; nunca decide validade nem
+altera estado. Lê `PlacementController.state` / `.hovered_coord` / `.is_hover_valid` /
+`.selected_definition` (leitura pública) e redesenha só quando `PlacementController.preview_changed`
+dispara (mudança real de estado) — mesmo padrão de `GridManager` (redraw orientado a mudança, não
+por frame). Desenha um retângulo na célula sob o cursor com três estados de cor (Phase 0.6): verde
+(válida e paga), âmbar (válida mas `not can_afford_selected()` — feedback de coins insuficientes
+já durante o hover), vermelho (inválida); um círculo translúcido do raio `definition.range`; e,
+desde a Phase 0.6, uma silhueta translúcida do dinossauro (mesmos pontos de
+`Dinosaur.tscn`/`Placeholder`, duplicados aqui deliberadamente — ambos são placeholder e serão
+substituídos juntos pela arte final, então uma `Resource` compartilhada só para isso seria
+overengineering nesta fase) tingida com a mesma cor de validade — requisito "mostrar o
+sprite/placeholder do dinossauro durante o placement", não só um retângulo na célula.
+
+### Economy
+
+`scripts/economy/economy.gd`, `Node` — `coins` de partida: estado runtime mutável, não
+`Resource` (mesmo raciocínio de `Cell.occupied`: dado que muda durante o jogo não deve viver num
+Resource potencialmente compartilhado). Só `starting_coins` é configuração (`@export`, mesmo
+padrão de `GridManager.map_definition`).
+
+Regras centralizadas: `can_afford(amount)`, `spend(amount) -> bool` (retorna `false` e não
+desconta nada se insuficiente) e `add(amount)` são os únicos pontos que tocam `coins` — quem quer
+gastar/conceder moedas chama estes métodos, nunca lê/escreve `coins` diretamente de fora (por
+convenção; GDScript não impõe privacidade real). Emite `coins_changed(new_amount)` a cada
+mudança real (não em `spend()` que falha).
+
+`reset()` público e separado de `_ready()`: mesmo motivo de `BasicEnemy.initialize()` — `_ready()`
+só dispara quando o node entra numa `SceneTree`, e testes que instanciam `Economy.new()`
+diretamente (sem `add_child`) precisam de um jeito de inicializar `coins` que funcione nos dois
+contextos.
+
+Sem loja, sem moeda premium, sem persistência — fora de escopo desta fase.
+
+### WaveManager
+
+`scripts/waves/wave_manager.gd`, `Node` — orquestra **quando** e **quantos** inimigos spawnar,
+com base numa sequência de `WaveDefinition`. Responsabilidade distinta de `EnemySpawner` (que só
+sabe criar UM inimigo por chamada e rastrear quem está vivo); combinar as duas faria
+`EnemySpawner` acumular estado/timing de onda além de criação — candidato real a God Object.
+Mantidas separadas por **composição**: `WaveManager` **usa** `EnemySpawner.spawn_enemy()` /
+`.get_active_enemies()`, não os substitui nem duplica a lógica.
+
+**Máquina de estados mínima** (`IDLE` / `SPAWNING` / `WAITING_FOR_CLEAR`):
+`start_next_wave()` é ignorado se já houver uma wave ativa, se estiver travado (`lock()`, ver
+Game Over abaixo), ou se não houver próxima wave — não permite duas waves simultâneas.
+
+`step(delta)` (chamado por `_process` e diretamente pelos testes — mesmo padrão de
+`BasicEnemy`/`Dinosaur`/`Projectile`): acumula tempo desde o último spawn; ao atingir
+`spawn_interval`, chama `EnemySpawner.spawn_enemy(speed_override, hp_override)`; ao atingir
+`enemy_count`, passa para `WAITING_FOR_CLEAR`; a wave só **completa** quando
+`EnemySpawner.get_active_enemies()` fica vazia (nenhum inimigo spawnado por ela continua vivo/em
+trânsito) — só então concede `wave_completion_reward` e emite `wave_completed`.
+
+**Recompensas:** `wave_completed` concede `wave_completion_reward` diretamente em
+`_complete_wave()`. `reward_per_kill` é concedido reagindo a `EnemySpawner.enemy_died` (não
+`BasicEnemy.died` diretamente — ver [BasicEnemy e EnemySpawner](#basicenemy-e-enemyspawner)),
+usando os dados da wave **atual** (`current_wave_index`) — seguro porque waves são estritamente
+sequenciais/não sobrepostas, então nenhum inimigo "órfão" de uma wave anterior pode estar vivo
+quando a próxima começa.
+
+**`lock()`** (chamado por `Main.gd` no GAME_OVER): trava permanentemente — nenhum spawn adicional
+acontece e nenhuma wave nova começa, mesmo se `step()`/`start_next_wave()` continuarem sendo
+chamados.
+
+### Egg e EggManager
+
+**`Egg`** (`scripts/eggs/egg.gd`, `Node2D`) — objeto real de gameplay (Phase 0.5), não mais dado
+abstrato do mapa: `max_hp`/`hp`/`is_destroyed()`/`take_damage()`, mesmo padrão de `BasicEnemy`.
+Placeholder visual reage ao dano de duas formas combinadas: um tingimento **permanente** por
+fração de HP (fica mais vermelho conforme perde HP, cinza quando destruído — Phase 0.5) e, desde a
+Phase 0.6, um **flash breve** (`Tween` de `modulate`, branco → cor permanente em 0.15s) marcando o
+instante exato do dano. Guardado por `is_inside_tree()` (`create_tween()` exige uma `SceneTree`
+válida): `egg_tests.gd` instancia `Egg.new()`/chama `initialize()` sem `add_child()` em vários
+casos, e sem essa guarda esses testes quebrariam; fora de uma árvore, `modulate` é setado
+diretamente (sem animação), preservando o comportamento síncrono que os testes já esperavam.
+
+**`EggManager`** (`scripts/eggs/egg_manager.gd`, `Node`) — cria um `Egg` por posição EGG do mapa.
+**Posições vêm de `MapDefinition.get_egg_positions()` — não duplicadas em nenhum outro Resource**
+(requisito explícito; mesma regra já valia para spawn/nest/buildable desde a Phase 0.2).
+
+**Regra determinística de seleção:** ao receber `EnemySpawner.enemy_reached_nest`, dano vai para
+o **primeiro ovo ainda vivo**, na mesma ordem derivada de `get_egg_positions()` (row-major) — não
+é "o mais próximo" nem aleatório, propositalmente simples (requisito 5 da especificação). O
+mesmo handler chama `enemy.queue_free()` logo em seguida — é aqui, não em `BasicEnemy`, que a
+decisão "remover o inimigo após causar dano ao ovo" é tomada (`BasicEnemy` continua sem se
+autodestruir sozinho ao `reached_nest`, mesma decisão da Phase 0.3; quem consome o evento é quem
+decide o que fazer depois).
+
+`all_eggs_destroyed` é emitido uma única vez (`_all_destroyed_emitted`), consumido por `Main.gd`
+para acionar GAME_OVER.
+
+### HUD
+
+`scripts/ui/hud.gd`, `CanvasLayer` — só **exibe** estado e **encaminha** intenção do jogador via
+sinais (`start_wave_pressed`, `pause_pressed`, `resume_pressed`, `menu_pressed`, `speed_pressed`,
+`dinosaur_button_pressed`); não decide nada sozinha — `Main.gd` decide o que fazer com cada sinal.
+Mesmo princípio de `PlacementPreview` (visual, não lógica de jogo).
+
+Métodos públicos (`set_coins`, `set_wave`, `set_wave_state`, `set_eggs`,
+`set_dinosaur_button_label`, `show_banner`/`hide_banner`, `show_pause_overlay`/
+`hide_pause_overlay`, `show_game_over`, `set_pause_label`, `set_speed_label`) são a única
+superfície que o resto do jogo toca — trocar `Label`/`Panel` por arte final depois não exige mudar
+quem chama esses métodos.
+
+`process_mode = PROCESS_MODE_ALWAYS` (setado em `HUD.tscn`, não em código): é o que permite a HUD
+continuar respondendo aos próprios botões mesmo com `get_tree().paused = true` — ver
+[Pausa e Velocidade](#pausa-e-velocidade) abaixo. `Root.mouse_filter = IGNORE` deixa cliques sem
+alvo (fora de botões) passarem para `_unhandled_input`/`InputManager`, para não bloquear
+placement.
+
+**Botão de dinossauro (Phase 0.6):** `DinosaurButton` reseleciona `initial_definition` sempre que
+`PlacementController` está `IDLE` (`Main._on_dinosaur_button_pressed()`). Antes deste botão
+existir, o jogador só conseguia colocar exatamente **um** Velociraptor por partida (a pré-seleção
+automática do início) — `PlacementController` já suportava múltiplos placements via API
+(`select_dinosaur()` genérico desde a Phase 0.4), só não havia como o jogador acionar isso de
+novo pela UI. Não é profundidade de jogo nova, só torna utilizável uma capacidade que já existia.
+
+### Pausa e Velocidade
+
+Ambos usam mecanismos **nativos** do Godot, não código customizado de timing:
+
+- **Pausa:** `Main._on_pause_pressed()`/`_on_resume_pressed()`/`_unpause()` alternam
+  `get_tree().paused`. Todo node de gameplay usa o `process_mode` padrão
+  (`PROCESS_MODE_INHERIT`), então `BasicEnemy`/`Dinosaur`/`Projectile`/`WaveManager` (todos com
+  lógica em `_process(delta)` → `step(delta)`) simplesmente **param de ser chamados** pelo motor
+  quando pausado — zero mudança de código nessas classes. Só a `HUD` tem `process_mode = ALWAYS`,
+  para os próprios botões continuarem funcionando.
+- **Overlay de pausa (Phase 0.6):** ao pausar, `HUD.show_pause_overlay()` mostra "PAUSADO" +
+  `ResumeButton` ("▶ CONTINUAR") + `PauseMenuButton` ("MENU"), além do botão compacto de
+  pausa/resume que já existia no canto superior — ambos levam ao mesmo `_unpause()`. `MENU`
+  (`Main._on_menu_pressed()`) despausa **antes** de trocar de cena
+  (`get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")`) — `get_tree().paused` é uma
+  propriedade global da árvore, não por-cena; sem esse reset o Main Menu nasceria pausado. Voltar
+  ao menu descarta a partida atual (permitido explicitamente nesta fase — sem `GameSession` ou
+  equivalente para preservar estado, ver [Phase 0.6](#phase-06--first-playable--ux-pass)).
+- **Velocidade x1/x2:** `Main._on_speed_pressed()` alterna `Engine.time_scale` entre `1.0` e
+  `2.0`. `Engine.time_scale` escala uniformemente o `delta` recebido por todo `_process()`/
+  `_physics_process()` do projeto — de novo, zero mudança nos `step()` já existentes (inclusive os
+  `Tween`s de `AnimatedVisual`, que também são escalados por `time_scale` por padrão — ver
+  [AnimatedVisual](#animatedvisual-e-deatheffect-phase-06)). `Main._ready()` reseta
+  `Engine.time_scale = 1.0` explicitamente (é uma propriedade global do motor, não por-cena — sem
+  esse reset, uma instância anterior de `Main` que tivesse ativado x2 vazaria esse estado para a
+  próxima, relevante principalmente em testes que instanciam `Main.tscn` mais de uma vez no mesmo
+  processo).
 
 ### MapValidator
 
@@ -334,8 +842,8 @@ ou `MapPath`) via `initialize(waypoints)`, e os percorre em ordem. `Node2D`, nã
 `CharacterBody2D`: não há física nem colisão nesta fase, só interpolação de posição — física
 seria peso desnecessário para o que o inimigo faz hoje.
 
-- `speed: float` (`@export`, px/s) — **TBD/placeholder balance**, valor só para
-  visualização/teste (`60.0`), não é número de design final.
+- `speed: float`, `max_hp: int` (`@export`) — **TBD/placeholder balance**, valores só para
+  visualização/teste (`60.0` px/s, `20` hp), não são números de design final.
 - Movimento independente de FPS: `step(delta)` avança `speed * delta` px em direção ao próximo
   waypoint; se `delta` cobrir mais de um waypoint no mesmo frame (velocidade alta), consome o
   restante no mesmo `step()` em vez de esperar o próximo frame; ao alcançar um waypoint, a
@@ -350,6 +858,44 @@ seria peso desnecessário para o que o inimigo faz hoje.
 - Direção: `rotation` é ajustada para apontar para o waypoint atual a cada passo de movimento —
   sem sistema de animação, só orientação básica, preparando para sprites direcionais futuros.
 
+**HP, dano e morte (Phase 0.4):** `take_damage(amount)` (API pública genérica — qualquer coisa
+pode chamar, hoje só `Projectile`) reduz `hp`; ao chegar a 0, `_die()` marca `is_dead()` e emite
+`died(self)` **antes** de `queue_free()` (ordem importa: `queue_free()` é diferido, então quem
+escuta `died` precisa reagir de forma síncrona, ex: remover o inimigo de um registro, antes do
+Node realmente sumir). `is_active()` = `not (_finished or _dead)`, usado por `Targeting`/
+`Projectile` para ignorar inimigos que não são mais alvos válidos sem cada um checar os dois
+estados separadamente. `take_damage()` e `step()` não fazem nada se `not is_active()` (inimigo
+morto não se move nem pode ser dano dobrado por dois projéteis no mesmo frame).
+
+**Dano aos ovos (Phase 0.5):** `egg_damage: int` (`@export`, TBD/placeholder balance) — quanto
+dano este inimigo causa a um ovo ao alcançar o ninho. Vive em `BasicEnemy` (não em `EggManager`
+nem hardcoded em nenhum lugar) pelo mesmo raciocínio de `speed`/`max_hp`: é um dado intrínseco do
+inimigo, extensível se tipos de inimigo diferentes existirem no futuro. `BasicEnemy` só carrega
+esse número — quem realmente aplica dano a um ovo é `EggManager`, reagindo ao sinal
+`reached_nest` (ver [Egg e EggManager](#egg-e-eggmanager)); `BasicEnemy` continua sem conhecer
+`Egg`/`EggManager` diretamente. `signal damaged(enemy, amount)` também foi adicionado — gancho
+para feedback visual futuro, emitido em `take_damage()` antes da checagem de morte.
+
+**Progresso no caminho — `get_distance_traveled()` (requisito 7):** distância acumulada (px de
+mundo) percorrida desde o SPAWN, atualizada em cada sub-passo de `step()`. Deliberadamente **não
+normalizada** (0–1): `BasicEnemy` não precisa conhecer o comprimento total do `MapPath` para isso
+ser útil — `Targeting` (modo FIRST) só precisa de valores comparáveis entre inimigos do mesmo
+mapa, não de uma fração. Isso mantém `BasicEnemy` completamente **independente de
+Dinosaur/Targeting** — ele só registra um fato sobre si mesmo (quanto andou), sem saber que
+alguém vai usar isso para escolher alvos.
+
+**Gotcha de inicialização de `hp` (descoberto durante a implementação):** `hp` é resetado dentro
+de `initialize(waypoints)`, não em `_ready()` nem como inicializador de campo (`var hp := max_hp`
+no corpo da classe). Dois motivos: (1) um inicializador de campo capturaria o valor **default do
+script** de `max_hp`, não um valor sobrescrito depois via `.tscn` ou por um teste, porque
+inicializadores de campo rodam durante a construção, antes de overrides de `@export` serem
+aplicados; (2) `_ready()` só dispara quando o node entra numa `SceneTree` — testes que instanciam
+`BasicEnemy.new()` diretamente (padrão já estabelecido desde a Phase 0.3) nunca chamam
+`add_child()`, então `_ready()` nunca rodaria, deixando `hp` incorretamente zerado. Como
+`initialize()` já era o ponto de entrada estabelecido de "preparar este inimigo para uma corrida"
+— chamado tanto por `EnemySpawner.spawn_enemy()` quanto por todo teste existente — colocar a
+inicialização de `hp` ali resolve os dois problemas de uma vez, sem precisar de um novo método.
+
 Visual: `scenes/enemies/BasicEnemy.tscn` = `BasicEnemy` (script) + `Polygon2D` filho (triângulo
 laranja simples). **Placeholder explicitamente temporário** — substituível por
 `Sprite2D`/`AnimatedSprite2D` sem tocar em `basic_enemy.gd` (a lógica de movimento não sabe nada
@@ -357,16 +903,118 @@ sobre a apresentação visual).
 
 **`EnemySpawner`** (`scripts/enemies/enemy_spawner.gd`, `Node`, não `Node2D` — sem identidade
 espacial própria, mesmo raciocínio de `InputManager`) — recebe `Grid` e `MapPath` já prontos via
-`setup()` (chamado por `Main`), e em `spawn_enemy()`: instancia `BasicEnemy` a partir de
-`enemy_scene` (`@export PackedScene`), converte os waypoints do `MapPath` (grid) para mundo via
-`Grid.cell_center_world()`, chama `initialize()`, e conecta ao próprio `reached_nest` do
-inimigo. Reemite como `enemy_reached_nest(enemy)` (sinal do próprio spawner) e loga — quem
-escuta esse evento hoje é só um `print()`; nenhum sistema (dano ao ninho, wave) existe ainda para
-consumi-lo de verdade.
+`setup()` (chamado por `Main`), e em `spawn_enemy(speed_override, hp_override)`: instancia
+`BasicEnemy` a partir de `enemy_scene` (`@export PackedScene`), aplica os overrides opcionais
+(`<= 0` = "usar o default do `.tscn`" — vindos de um `WaveDefinition`, mas `EnemySpawner` não
+sabe disso, só recebe dois números), converte os waypoints do `MapPath` (grid) para mundo via
+`Grid.cell_center_world()`, chama `initialize()`, e conecta aos sinais do inimigo. Reemite como
+`enemy_reached_nest(enemy)` e `enemy_died(enemy)` (sinais do próprio spawner) — quem precisa
+saber de mortes/chegadas (`WaveManager`, `EggManager`) escuta o spawner, não cada `BasicEnemy`
+individualmente.
 
-**Spawn desta fase é manual e único**, disparado por `Main._ready()` (`_enemy_spawner.setup(...)`
-seguido de `_enemy_spawner.spawn_enemy()`). Não existe wave manager, timer de spawn, nem múltiplos
-inimigos — fora de escopo da Phase 0.3.
+**Registro de inimigos ativos (`get_active_enemies()`):** `EnemySpawner` mantém
+`_active_enemies: Array[BasicEnemy]`, adicionando cada inimigo em `spawn_enemy()` e removendo
+quando ele: morre (`died`), chega ao ninho (`reached_nest`), ou é removido da árvore por
+qualquer outro motivo (`tree_exited` — rede de segurança; `Array.erase()` não faz nada se o
+elemento já não estiver presente, então é seguro conectar os três sem risco de remoção
+duplicada causar erro). Consumido por `Dinosaur`/`Targeting` (escolher alvos) e por
+`WaveManager` (detectar conclusão de wave).
+
+**Deliberadamente NÃO extraído para uma classe `EnemyRegistry`/`EnemyManager` separada**
+(explicitamente pedido para não criar, de novo, na Phase 0.5): a previsão feita na Phase 0.4 se
+confirmou — `WaveManager` (Phase 0.5) de fato precisa dessa lista, e `EnemySpawner` já a mantinha
+antes de `WaveManager` existir.
+
+**Spawn não é mais automático nem único (mudança da Phase 0.5):** `Main._ready()` só chama
+`_enemy_spawner.setup(...)` — quem decide **quando** e **quantos** `spawn_enemy()` chamar é
+`WaveManager`, disparado pelo jogador via HUD. `EnemySpawner` continua sem saber nada sobre
+waves — só cria UM inimigo por chamada, com os parâmetros que recebe.
+
+### AnimatedVisual e DeathEffect (Phase 0.6)
+
+**Regra do projeto a partir desta fase: nenhuma entidade fica visualmente estática como solução
+definitiva.** `scripts/visuals/animated_visual.gd` (`class_name AnimatedVisual`, `Node2D`) é a
+camada de apresentação compartilhada por `Dinosaur`/`BasicEnemy`/`Egg`/`Projectile` — cada uma tem
+um node filho `Visual` com este script (em vez de um `Node2D` neutro, como era até a Phase 0.5).
+Gameplay nunca manipula `Tween`/`Polygon2D`/`AnimatedSprite2D` diretamente; só chama
+`_visual.play_state(AnimatedVisual.State.X)` com um dos 5 estados padronizados
+(`IDLE`/`MOVE`/`ATTACK`/`HIT`/`DEATH`).
+
+**Como é realizado hoje, sem pixel art final:** `play_state()` primeiro tenta uma animação de
+mesmo nome (`"idle"`/`"move"`/`"attack"`/`"hit"`/`"death"`) num `AnimatedSprite2D` filho, se
+existir e tiver essa animação em `sprite_frames`. Sem isso — o caso de hoje, em todo entity do
+jogo — cai num fallback **procedural**: `Tween` simples sobre `rotation`/`scale`/`modulate` do
+próprio `Visual`, usando só a engine, sem nenhum asset. É a "camada equivalente adequada" ao
+`AnimatedSprite2D` para esta fase: no dia em que houver arte final, basta adicionar um
+`AnimatedSprite2D` com `SpriteFrames` contendo animações "idle"/"move"/etc. como filho de
+`Visual` — o fallback procedural para de ser usado automaticamente (a checagem
+`sprite_frames.has_animation(name)` passa a ser verdadeira), **sem mudar uma linha de código de
+gameplay**. Nenhuma arte final foi criada nesta fase — só a estrutura pronta para recebê-la.
+
+**Duas trilhas de `Tween` independentes**, cada uma só mexendo nas suas próprias propriedades
+(evita duas animações concorrentes brigando pela mesma propriedade no mesmo frame):
+
+| Trilha | Estados | Propriedade | Comportamento |
+|---|---|---|---|
+| `_loop_tween` | IDLE, MOVE | `rotation` | looping infinito (`set_loops()`); MOVE balança mais rápido/perceptível que IDLE |
+| `_reaction_tween` | ATTACK, HIT, DEATH | `scale` / `modulate` | um tiro só, sempre reiniciado (`kill()` do anterior) |
+
+**"Feedback de spawn" embutido:** a primeira vez que qualquer estado de loop toca (IDLE ou MOVE),
+a entidade nasce pequena e cresce até o tamanho normal (usa a trilha de reação, já que loop nunca
+toca `scale`) — em vez de simplesmente aparecer estática no mapa. Cobre o requisito sem precisar
+de um 6º estado dedicado.
+
+**`base_modulate` + `set_base_modulate()`:** cor de "repouso" para onde HIT sempre relaxa de
+volta. `Egg` a atualiza a cada mudança de HP (tingimento permanente por fração de vida,
+comportamento que já existia desde a Phase 0.5) e `Dinosaur` a usa para
+`DinosaurDefinition.placeholder_color` (ver [Dinosaur](#dinosaur)). `set_base_modulate()` (não só
+setar o campo) existe porque um tingimento permanente precisa aparecer **na hora**, não só na
+próxima vez que uma animação HIT tocar.
+
+**Guarda universal `is_inside_tree()`** (dentro do próprio `play_state()`, não em cada chamador):
+`create_tween()` exige uma `SceneTree` válida, e várias suítes de teste (`enemy_tests.gd`,
+`dinosaur_tests.gd`, `egg_tests.gd`, `projectile_tests.gd`) instanciam entidades via `.new()` sem
+`add_child()`, onde nenhum `Visual` sequer chega a existir (`@onready` nunca dispara). Cada
+chamador (`BasicEnemy`/`Dinosaur`/`Egg`/`Projectile`) já checa `if _visual != null` antes de
+chamar `play_state()`/`set_base_modulate()` — isso cobre o caso de `_visual` nunca ter sido
+resolvido; `play_state()` cobre o caso (mais raro) de `_visual` existir mas o node ainda não estar
+numa árvore viva.
+
+**`DeathEffect`** (`scripts/visuals/death_effect.gd` + `scenes/effects/DeathEffect.tscn`) — efeito
+visual autônomo para morte de inimigo, chegada ao ninho, e impacto de projétil. **Nunca** fica no
+caminho crítico de remoção da entidade: `BasicEnemy._die()`/`_advance_waypoint()` (chegada) e
+`Projectile.step()` (impacto) continuam chamando `queue_free()` **imediatamente**, exatamente como
+antes — adiar isso para "esperar a animação terminar" arriscaria travar testes headless que não
+bombeiam frames reais depois da morte/impacto (vários chamam `take_damage()` e seguem direto para
+a próxima asserção). Em vez disso, a entidade que está desaparecendo instancia um `DeathEffect`
+como **irmão** de si mesma (`get_parent().add_child(effect)` — o próprio `EnemySpawner`/container
+de projéteis, que já sobrevive à entidade), toca `AnimatedVisual.State.DEATH` no próprio
+`_ready()`, e se autodestrói sozinho via `get_tree().create_timer(0.4).timeout.connect(queue_free)`
+— sem exigir nenhum acompanhamento externo. Como fica dentro da árvore de cena, é limpo
+normalmente pelo shutdown do motor/`main.free()` em qualquer teste, mesmo se o timer nunca
+disparar de verdade (testes que não bombeiam frames reais depois de spawná-lo).
+
+**Por que não atrasar o `queue_free()` real em vez de duplicar um efeito:** foi a primeira opção
+considerada e descartada. `queue_free()` já é deferred (não instantâneo), mas atrasá-lo por uma
+animação inteira (~0.3–0.4s) faria um teste que chama `take_damage(lethal)` e verifica
+`not is_instance_valid(enemy)` logo em seguida falhar, a menos que o teste também esperasse um
+tempo real equivalente — fragilidade exatamente do tipo que este projeto vem evitando desde a
+Phase 0.2.1 (harness de testes). Decoupling via node irmão evita o problema inteiro: o estado
+lógico (`is_active()`, remoção de `EnemySpawner._active_enemies`) continua imediato; só a
+apresentação visual tem vida própria.
+
+**`Egg` não usa `DeathEffect`/`DEATH`:** o ovo não se move nem é removido da cena quando destruído
+(continua visível, só visualmente "morto" — cinza, comportamento desde a Phase 0.5). Usar o
+estado DEATH (que desaparece por completo, `modulate:a -> 0`) seria errado para um objeto que
+precisa continuar visível — por isso `Egg` só usa HIT (flash + tingimento permanente), inclusive
+na destruição.
+
+**Bug real encontrado e corrigido nesta fase:** `PackedScene.instantiate()` retorna `Node`, não
+`Node2D` — `var effect := _DEATH_EFFECT_SCENE.instantiate()` seguido de
+`effect.global_position = ...` é um erro de tipagem estático (`Node` não tem `global_position`).
+Corrigido com `as Node2D` explícito em `BasicEnemy._spawn_death_effect()` e
+`Projectile._spawn_impact_effect()` — encontrado pelo compile-check individual do
+`run_tests.ps1`, não por inspeção manual.
 
 ### CellType: enum vs. Resource
 
@@ -382,22 +1030,40 @@ próprios (textura, nome, parâmetros de gameplay) — não é o caso agora. Se 
 
 ### Signals
 
-`InputManager` expõe `pointer_moved(world_pos)` e `pointer_pressed(world_pos)`. `GridManager`
-expõe métodos públicos (`on_pointer_moved`, `on_pointer_pressed`), sem conhecer quem os chama.
-`Main.gd` (composition root) faz a conexão entre os dois no `_ready()`. Nenhum dos dois nodes
-tem referência direta ao outro — convenção a seguir para futuras adições de sistemas irmãos.
+`InputManager` expõe `pointer_moved(world_pos)` e `pointer_pressed(world_pos)`. `GridManager` e
+`PlacementController` expõem métodos públicos (`on_pointer_moved`/`on_pointer_pressed`), sem
+conhecer quem os chama nem um ao outro — `Main.gd` (composition root) conecta ambos ao mesmo par
+de sinais do `InputManager` no `_ready()` (Godot suporta múltiplos listeners no mesmo sinal
+nativamente). Mesmo padrão para os sistemas novos da Phase 0.5: `EggManager` escuta
+`EnemySpawner.enemy_reached_nest` diretamente (não é `Main.gd` que intermedia), `WaveManager`
+escuta `EnemySpawner.enemy_died` diretamente, e `HUD` só emite sinais de intenção
+(`start_wave_pressed`/`pause_pressed`/`resume_pressed`/`menu_pressed`/`speed_pressed`/
+`dinosaur_button_pressed`) — quem decide o que fazer com cada um é sempre `Main.gd`. Nenhum desses
+nodes tem referência direta a outro além do que recebe via `setup()`. `MainMenu` não se conecta a
+nada de `Main`/gameplay — a única "comunicação" entre as duas cenas é
+`get_tree().change_scene_to_file()`, sem nenhum sinal ou estado compartilhado (ver
+[Phase 0.6](#phase-06--first-playable--ux-pass)).
 
 ### Event Bus
 
-Não introduzido. Com apenas dois sistemas se comunicando, signals diretos conectados pelo nó pai
-são suficientes e mais simples de rastrear. Reavaliar apenas se/quando o número de sistemas que
-precisam se comunicar entre si crescer a ponto de conexões diretas ficarem impraticáveis.
+Não introduzido. Cada sistema novo continua se conectando diretamente à fonte do evento que
+precisa (via `setup()`, chamado por `Main.gd`) — mesmo com bem mais sistemas do que na Phase 0.1,
+nenhuma conexão precisou passar por um intermediário genérico. Reavaliar apenas se/quando isso
+deixar de ser verdade.
 
 ## Gerenciamento de Estado
 
-Não implementado ainda (sem wave atual, economia, vida da base — esses conceitos não existem no
-código). O único estado runtime existente é por-célula (`Cell.occupied`, ainda não consumido por
-nenhum sistema) e a célula atualmente sob o cursor (`GridManager._hovered_coord`, privado).
+**Estado da partida (Phase 0.5):** `Main.gd` guarda um enum simples,
+`GameState { PREPARING, WAVE_ACTIVE, WAVE_COMPLETE, GAME_OVER }`, controlado inteiramente pelo
+*composition root* (requisito explícito da especificação) — não é uma máquina de estados abstrata
+separada, é um `enum` + reações a sinais dos sistemas que de fato sabem quando algo aconteceu
+(`WaveManager.wave_started`/`wave_completed`, `EggManager.all_eggs_destroyed`). `Main` nunca
+decide *por* esses sistemas, só reage e atualiza a `HUD`.
+
+Outro estado runtime existente: por-célula (`Cell.occupied`), a célula sob o cursor
+(`GridManager._hovered_coord`, privado), o estado de seleção/hover de `PlacementController`
+(`state`/`hovered_coord`/`is_hover_valid`/`selected_definition`), `Economy.coins`, o HP de cada
+`Egg`, e o estado interno de `WaveManager` (`state`/`current_wave_index`).
 
 ## Persistência
 
@@ -429,11 +1095,71 @@ apenas o `SceneTree` do próprio Godot em modo headless.
   `is_finished()`, emissão do sinal `reached_nest`, independência de FPS (mesmo resultado final
   com um `step()` grande ou vários pequenos somando o mesmo tempo), e ausência de movimento após
   terminado.
-- `game/tests/integration_tests.gd` (Phase 0.3) — instancia `Main.tscn` de verdade (o wiring de
-  produção completo) e confirma ponta a ponta: mapa carrega, `EnemySpawner` cria um `BasicEnemy`
-  real na posição de mundo do SPAWN, o inimigo consegue percorrer o caminho todo (avançado via
-  `step(delta)` determinístico, não frames reais) e chega à posição de mundo do NEST emitindo
-  `enemy_reached_nest` através do `EnemySpawner`.
+- `game/tests/integration_tests.gd` (Phase 0.3, ajustado na 0.5) — instancia `Main.tscn` de
+  verdade e confirma o pipeline MapPath→EnemySpawner→BasicEnemy ponta a ponta: chama
+  `spawner.spawn_enemy()` diretamente (desde a Phase 0.5, `Main` não spawna mais sozinho — ver
+  [WaveManager](#wavemanager)), o inimigo percorre o caminho todo (via `step(delta)`
+  determinístico) e chega à posição de mundo do NEST emitindo `enemy_reached_nest`.
+- `game/tests/dinosaur_definition_tests.gd` (Phase 0.4) — Velociraptor real: carrega, campos
+  positivos, `projectile_scene` atribuído e instanciável como `Projectile`, `display_name`
+  correto.
+- `game/tests/placement_tests.gd` (Phase 0.4, expandido na 0.5) — `PlacementController.is_valid_placement()`
+  contra `Grid` sintético para cada `CellType` (só BUILDABLE livre é válido), BUILDABLE já
+  ocupado, coordenada fora dos limites; o efeito real de `on_pointer_pressed()`: célula fica
+  ocupada, exatamente 1 `Dinosaur` é instanciado, estado volta para IDLE; célula inválida não
+  instancia nada e permanece em PLACING; e (Phase 0.5) custo descontado ao colocar, placement
+  recusado sem coins suficientes (nada descontado, nenhum `Dinosaur` criado,
+  `placement_failed("insufficient_coins")` emitido).
+- `game/tests/targeting_tests.gd` (Phase 0.4) — `Targeting.select_target()`: sem candidatos, um
+  candidato dentro do alcance, fora do alcance, inimigo morto, inimigo que já chegou ao ninho, e
+  FIRST desempatando corretamente por `get_distance_traveled()` mesmo quando o de maior progresso
+  não é o fisicamente mais próximo.
+- `game/tests/dinosaur_tests.gd` (Phase 0.4) — `Dinosaur.step(delta)` chamado diretamente: seleção
+  de alvo dentro do alcance, nenhum alvo sem inimigos, dispara ao encontrar alvo (cooldown inicial
+  zero), não dispara de novo antes do cooldown terminar, dispara de novo depois.
+- `game/tests/projectile_tests.gd` (Phase 0.4) — `Projectile.step(delta)` chamado diretamente:
+  avança em direção ao alvo sem overshoot, aplica dano exatamente uma vez ao impactar, alvo
+  liberado (`free()`) ou morto antes do impacto não causa erro nem dano.
+- `game/tests/combat_integration_tests.gd` (Phase 0.4, ajustado na 0.5) — vertical slice de
+  combate com `Main.tscn` real: Velociraptor pré-selecionado (estado PLACING), placement numa
+  célula BUILDABLE real do Vale dos Ovos, um inimigo criado via `spawn_enemy()` direto (sem
+  envolver wave/economia — isso é `game_loop_integration_tests.gd`), `Dinosaur` real instanciado,
+  inimigo avançado em lockstep com `Dinosaur.step()`/`Projectile.step()` até morrer pelos disparos
+  do dinossauro **antes** de alcançar o ninho.
+- `game/tests/economy_tests.gd` (Phase 0.5) — `coins` inicial, `can_afford`, `spend`
+  (sucesso/falha, e que falha não desconta), `add` (inclusive ignorar valores `<= 0`), sinal
+  `coins_changed` (emitido em sucesso, não emitido em falha).
+- `game/tests/egg_tests.gd` (Phase 0.5) — `Egg`: hp após `initialize()`, dano reduz hp,
+  destruição em 0 hp (sem hp negativo), sinais `damaged`/`destroyed`, sem dano/sinal duplicado
+  após destruído. `EggManager`: quantidade/posições derivadas de `MapDefinition.get_egg_positions()`,
+  `all_destroyed()`, seleção determinística (primeiro ovo vivo, na ordem do mapa), sinal
+  `all_eggs_destroyed`, e reação real a `EnemySpawner.enemy_reached_nest`.
+- `game/tests/wave_tests.gd` (Phase 0.5) — `WaveManager` com `EnemySpawner` real (mapa sintético
+  SPAWN-PATH-NEST): início de wave + sinal, impedir duas waves simultâneas, contagem correta de
+  spawn ao longo de `step(delta)`, conclusão só quando não sobra nenhum inimigo ativo,
+  recompensa por kill e por conclusão de wave, `lock()` impede spawn/wave novos,
+  `has_next_wave()`.
+- `game/tests/game_loop_integration_tests.gd` (Phase 0.5) — `Main.tscn` real, dois cenários:
+  (A) ciclo completo — mapa carrega, 3 eggs e economia existem, Velociraptor pré-selecionado é
+  colocado (custo descontado), Wave 1 iniciada pelo botão real da HUD, inimigos spawnados e
+  perseguidos pelo caminho em lockstep com `Dinosaur`/`Projectile`, coins aumentam, wave termina,
+  nenhum ovo perdido; (B) sem nenhum dinossauro colocado — um inimigo alcança o ninho, um ovo
+  recebe dano, e o inimigo desaparece (`queue_free`, confirmado após um `process_frame`).
+- `game/tests/ux_tests.gd` (Phase 0.6) — `MainMenu.tscn` carrega e tem os 3 botões esperados; API
+  pública da `HUD` (`set_coins`/`set_eggs`/`set_dinosaur_button_label`/`show_banner`/
+  `hide_banner`/`show_pause_overlay`/`hide_pause_overlay`/`show_game_over`) instanciada
+  standalone; via `Main.tscn` real: `pause_pressed`/`resume_pressed` pausam/despausam a árvore e
+  mostram/escondem o overlay, iniciar uma wave mostra o banner "WAVE 1", completá-la mostra um
+  banner com "COMPLETE", e o botão de dinossauro permite colocar um segundo Velociraptor depois do
+  primeiro placement (deriva as coordenadas de `MapDefinition.get_buildable_cells()`, não
+  hardcoded, para não depender de um layout específico do Vale dos Ovos).
+- `game/tests/animated_visual_tests.gd` (Phase 0.6) — `AnimatedVisual`: `play_state()` fora de
+  uma árvore não lança erro; fallback procedural muda `modulate` num HIT real; `set_base_modulate()`
+  aplica a cor imediatamente; com um `AnimatedSprite2D` filho tendo uma animação "hit" em
+  `sprite_frames`, `play_state(HIT)` toca essa animação; sem uma animação "attack" correspondente,
+  não finge tocar uma inexistente (cai no fallback). `placement_tests.gd` ganhou 2 casos novos:
+  `dinosaur_placed` emitido com o `Dinosaur`/coordenada corretos, e `can_afford_selected()`
+  refletindo `Economy` para custos diferentes.
 
 **Como executar (recomendado — inclui verificação de compilação, ver Phase 0.2.1):**
 
@@ -449,6 +1175,18 @@ godot --headless --path game --script res://tests/map_tests.gd
 godot --headless --path game --script res://tests/path_tests.gd
 godot --headless --path game --script res://tests/enemy_tests.gd
 godot --headless --path game --script res://tests/integration_tests.gd
+godot --headless --path game --script res://tests/dinosaur_definition_tests.gd
+godot --headless --path game --script res://tests/placement_tests.gd
+godot --headless --path game --script res://tests/targeting_tests.gd
+godot --headless --path game --script res://tests/dinosaur_tests.gd
+godot --headless --path game --script res://tests/projectile_tests.gd
+godot --headless --path game --script res://tests/combat_integration_tests.gd
+godot --headless --path game --script res://tests/economy_tests.gd
+godot --headless --path game --script res://tests/egg_tests.gd
+godot --headless --path game --script res://tests/wave_tests.gd
+godot --headless --path game --script res://tests/game_loop_integration_tests.gd
+godot --headless --path game --script res://tests/ux_tests.gd
+godot --headless --path game --script res://tests/animated_visual_tests.gd
 ```
 
 Saída esperada em cada um: `ALL TESTS PASSED` e código de saída `0`; em caso de falha, cada
@@ -592,6 +1330,57 @@ determinístico**, não polling nem dependência de quantos frames algo "eventua
 avanço de tempo do movimento em si continua 100% determinístico via `BasicEnemy.step(delta)`
 chamado diretamente pelo teste — nenhuma dependência de timing real de frame foi introduzida.
 
+## Phase 0.4 — Dinosaur/Tower System
+
+Dois problemas reais foram descobertos rodando (não apenas inspecionando) os testes desta fase.
+
+### 1) `Projectile` só detectava impacto no `step()` seguinte, não no mesmo
+
+**Sintoma:** `projectile_tests.gd` — um único `step(1.0)` com o alvo a 50px e velocidade 200px/s
+(bastante para cobrir a distância inteira nesse passo) não aplicava dano (`hp` permanecia igual
+ao inicial).
+
+**Causa:** a checagem de chegada comparava `distance` contra um epsilon fixo pequeno
+(`_ARRIVAL_EPSILON = 4.0`), independente de quanto o projétil realmente conseguia se mover
+naquele `step()`. Um `step()` que movia o projétil os 50px inteiros (`position += direção * 50`)
+deixava a nova posição exatamente EM CIMA do alvo, mas a checagem de "cheguei" só era feita no
+**início** da chamada seguinte de `step()`, nunca reavaliada depois do próprio movimento dentro
+da mesma chamada — diferente de `BasicEnemy.step()`, que já comparava contra "quanto posso me
+mover neste passo" (`distance <= max_move`) antes de decidir mover ou chegar.
+
+**Correção:** comparar contra `speed * delta + epsilon` (quanto o projétil pode se mover neste
+passo, com uma pequena margem de segurança para erro de ponto flutuante) em vez de um epsilon
+fixo — mesmo critério de chegada já usado em `BasicEnemy`. `combat_integration_tests.gd` não
+detectou o bug porque usa `dt=0.05` (passos pequenos, muitos por segundo) — a aproximação gradual
+naturalmente passa por um passo onde `distance <= max_move` já é verdade antes de "pular por
+cima" do alvo; só um `step()` com delta grande o bastante para cobrir a distância inteira de uma
+vez expõe o problema. Isso reforça a importância de testes de unidade com deltas grandes/únicos,
+não só simulações com passos pequenos.
+
+### 2) Cenas reais instanciadas em testes vazavam RID/CanvasItem se não fossem explicitamente liberadas
+
+**Sintoma:** `placement_tests.gd` e `dinosaur_tests.gd` terminavam com `ALL TESTS PASSED` (exit
+code `0`, todas as asserções corretas) mas imprimiam, ao sair do processo:
+`ERROR: N resources still in use at exit`, `WARNING: N ObjectDB instances were leaked`,
+`WARNING: N RIDs of type "CanvasItem" were leaked`.
+
+**Causa:** ao contrário de `Grid`/`Cell`/`MapPath` (`RefCounted`, liberados automaticamente),
+`PlacementController._place_dinosaur()` e `Dinosaur._fire()` instanciam **cenas reais**
+(`Dinosaur.tscn`, `Projectile.tscn`) com nodes `Polygon2D` de verdade (recursos de renderização
+no servidor gráfico) — e ficavam presos a containers `Node.new()` locais dos testes que nunca
+eram liberados ao final da função de teste.
+
+**Correção:** todo objeto criado em `placement_tests.gd`/`dinosaur_tests.gd` (containers,
+`PlacementController`, `EnemySpawner`, `Dinosaur`) passou a ser registrado num array `_to_free` e
+liberado explicitamente ao final de `_initialize()` (`Grid` continua isento — `RefCounted` não
+precisa disso). `Node.free()` libera recursivamente os filhos (então registrar o container já é
+suficiente para o `Dinosaur`/`Projectile` real instanciado dentro dele).
+
+**Por que isso importava mesmo com exit code `0`:** nenhuma dessas linhas fazia `_check()` falhar
+(não são assert de teste), mas são `ERROR`/`WARNING` reais no output — exatamente o tipo de coisa
+que a especificação da Phase 0.4 pediu para não aceitar silenciosamente só porque
+`ALL TESTS PASSED` apareceu. Corrigido antes de considerar a fase concluída.
+
 ## Decisões técnicas adicionais desta fase
 
 - **Renderer:** `gl_compatibility` (Compatibility renderer), tanto para desktop quanto mobile
@@ -674,3 +1463,269 @@ chamado diretamente pelo teste — nenhuma dependência de timing real de frame 
 - **`speed` em `BasicEnemy` é TBD/placeholder balance** (`60.0` px/s) — só para
   visualização/teste nesta fase; não é um valor de design final, e não há sistema de
   balanceamento ainda.
+
+## Decisões técnicas — Phase 0.4
+
+- **`EnemySpawner` ganha o registro de inimigos ativos**, em vez de uma classe
+  `EnemyRegistry`/`EnemyManager` separada (explicitamente pedido para não criar) — ver
+  [BasicEnemy e EnemySpawner](#basicenemy-e-enemyspawner).
+- **Enum + `match` para `Targeting`**, não Strategy Pattern (explicitamente pedido para não
+  criar) — ver [Targeting](#targeting).
+- **`Dinosaur.tscn` único e genérico**, `.tres` por tipo de dinossauro — nenhuma subclasse por
+  dinossauro (explicitamente pedido para não criar). `velociraptor.tres` é a única instância
+  concreta desta fase.
+- **`placeholder_color` existe em `DinosaurDefinition` mas não está conectado a nenhum visual
+  ainda** — ver [Dinosaur](#dinosaur). Documentado como dado preparado, não como funcionalidade
+  implementada, para não sugerir que já tem efeito.
+- **Célula inválida durante PLACING não cancela a seleção**, permanece em `PLACING` para permitir
+  nova tentativa — não estava explícito na especificação; escolhido por ser o comportamento mais
+  natural (o jogador não perde a seleção por errar o clique/toque uma vez).
+- **Projéteis parentados em `Projectiles` (container neutro sob `Main`), não como filho do
+  `Dinosaur` que disparou** — um projétil em voo sobrevive à remoção futura do dinossauro de
+  origem (venda/upgrade, fora de escopo agora, mas a estrutura já não impede).
+- **`step(delta)` em `Dinosaur`/`Projectile`**, mesmo nome/convenção de `BasicEnemy.step(delta)`
+  — vocabulário consistente em todas as entidades "simuladas" do jogo, todas testáveis
+  diretamente sem depender de frame real.
+- **`max_hp`/`hp` em `BasicEnemy` diretamente (`@export`), sem um `EnemyDefinition` Resource**
+  ainda — só existe um tipo de inimigo; extrair um Resource de dados agora seria abstração
+  prematura (mesmo raciocínio já aplicado a `speed` desde a Phase 0.3). Se/quando existir um
+  segundo tipo de inimigo, `EnemyDefinition` (espelhando `DinosaurDefinition`) é o refactor
+  natural.
+- **`get_distance_traveled()` não normalizado (0–1)** — ver
+  [BasicEnemy e EnemySpawner](#basicenemy-e-enemyspawner) para o racional completo (requisito 7).
+
+## Phase 0.5 — Primeiro Game Loop Jogável Completo
+
+Diferente das fases anteriores, **nenhuma limitação nova do Godot 4.7.2 foi descoberta** rodando
+os testes desta fase — registrado aqui por completude/honestidade, não porque houvesse algo para
+corrigir. O único bug real encontrado (`Projectile`, checagem de impacto contra epsilon fixo em
+vez de `speed*delta`) já existia desde a Phase 0.4 e está documentado na seção
+[Phase 0.4](#phase-04--dinosaurtower-system) — não foi reintroduzido nem alterado aqui.
+
+**Precaução mantida, não um bug confirmado:** `WaveManager.waves` (`Array[WaveDefinition]`) é
+montado em `Main.gd` via `load()` de caminhos fixos, não atribuído via export em `Main.tscn`.
+Escrever manualmente o literal `Array[WaveDefinition](...)` no formato texto do `.tscn` é uma
+sintaxe que este projeto não teve como validar contra o editor real antes deste momento — mesma
+categoria de risco já evitada na Phase 0.1 (bloco de `InputMap` serializado à mão). Diferente do
+`InputMap` da Phase 0.1 (nunca chegou a ser tentado), aqui a alternativa seria testável no editor
+se necessário; a decisão foi não arriscar por uma economia pequena de código. Ver
+[Decisões — Phase 0.5](#decisões-técnicas--phase-05).
+
+**Mudança de comportamento deliberada:** desde esta fase, `Main._ready()` **não spawna mais um
+inimigo sozinho** ao iniciar (diferente de Phase 0.3/0.4) — spawning é exclusivamente
+responsabilidade de `WaveManager`, disparado pelo jogador via HUD. Isso quebrou dois testes de
+integração mais antigos (`integration_tests.gd`, `combat_integration_tests.gd`), que assumiam o
+spawn automático; ambos foram ajustados para chamar `spawn_enemy()` diretamente, preservando seu
+escopo original (validar o encanamento MapPath→EnemySpawner e a mecânica de combate,
+respectivamente, sem envolver waves/economia — isso é `game_loop_integration_tests.gd`).
+
+## Decisões técnicas — Phase 0.5
+
+- **`WaveManager` como classe separada de `EnemySpawner`** — orquestrar quando/quantos inimigos
+  spawnar é uma responsabilidade temporal/de estado de onda distinta de "criar um inimigo e
+  rastrear quem está vivo"; combinar as duas era candidato real a God Object. `WaveManager` usa
+  `EnemySpawner` por composição, não duplica sua lógica.
+- **Recompensa por kill vinculada à wave atual** (`WaveDefinition.reward_per_kill`, não um valor
+  fixo por tipo de inimigo) — permite ondas posteriores pagarem mais por kill sem precisar de
+  múltiplos tipos de `BasicEnemy`. Seguro porque waves são estritamente sequenciais (nunca duas
+  ativas ao mesmo tempo), então "a wave atual" nunca é ambíguo quando um inimigo morre.
+- **`EnemySpawner` ganha `enemy_died` (re-emissão de `BasicEnemy.died`)** — mesmo padrão já usado
+  por `enemy_reached_nest`: quem precisa saber de mortes (`WaveManager`) escuta o spawner, nunca
+  cada `BasicEnemy` individualmente.
+- **Egg é `Node2D` com placeholder visual próprio** (não um dado puro/`RefCounted`) — só 3 no
+  máximo, sem preocupação de performance como as 240 células da grid; ter posição/visual próprios
+  simplifica o feedback de dano (`modulate`) sem precisar de um mecanismo de desenho agregado
+  como o de `GridManager`.
+- **Regra de seleção de ovo "primeiro vivo, na ordem do mapa"** — não "mais próximo" nem
+  aleatório, propositalmente simples (requisito explícito 5).
+- **Remoção do inimigo ao alcançar o ninho é decisão de `EggManager`, não de `BasicEnemy`** —
+  `BasicEnemy` continua sem se autodestruir sozinho ao `reached_nest` (mesma decisão da Phase
+  0.3); quem consome o evento (`EggManager`, agora) é quem decide chamar `queue_free()`.
+- **Custo verificado só na confirmação do placement, não durante o hover/preview** — a validade
+  de célula (verde/vermelho) reflete só BUILDABLE+livre; afordabilidade é checada separadamente
+  em `on_pointer_pressed()`, na ordem exata pedida (célula válida → confirmar → verificar coins →
+  descontar).
+- **Pausa via `get_tree().paused` + `process_mode`, velocidade via `Engine.time_scale`** —
+  mecanismos nativos do Godot, conforme sugerido explicitamente pela especificação; zero mudança
+  de código nos `step()` determinísticos já existentes (`BasicEnemy`/`Dinosaur`/`Projectile`/
+  `WaveManager`) para suportar os dois.
+- **`WaveManager.waves` montado via `load()` em código, não via export tipado no `.tscn`** — ver
+  [Phase 0.5](#phase-05--primeiro-game-loop-jogável-completo) acima.
+- **Estado da partida (`GameState`) vive direto em `Main.gd`, sem classe própria** — requisito
+  explícito ("controlado pelo composition root"); evitar uma máquina de estados abstrata separada
+  quando o `enum` + reações a sinais já resolve com clareza.
+- **`HUD` não decide nada** — só emite sinais de intenção do jogador (`start_wave_pressed` etc.) e
+  expõe métodos de exibição; toda decisão (o que fazer quando o botão é apertado) vive em
+  `Main.gd`. Mesmo princípio já aplicado a `PlacementPreview`.
+
+## Phase 0.6 — First Playable / UX Pass
+
+Objetivo: transformar o protótipo técnico da Phase 0.5 numa experiência jogável de ponta a ponta
+e clara — BOOT → MAIN MENU → JOGAR → Vale dos Ovos → PREPARE → colocar Velociraptor → iniciar
+wave → combate → recompensa → WAVE COMPLETE → próxima wave → GAME OVER — sem adicionar
+profundidade de jogo nova (sem novos dinossauros/inimigos/upgrades/tipos de ovo/monetização/
+login real/save/multiplayer).
+
+**Dois blocos de trabalho, uma fase só:** esta fase foi interrompida por limite de sessão logo
+depois da primeira leva de mudanças (Main Menu, HUD, placement UX, feedback de combate via `Tween`
+ad-hoc por entidade) — o trabalho retomado NÃO refez nada já concluído; validou o que já existia
+(achando e corrigindo dois bugs reais só então expostos por `run_tests.ps1`, ver abaixo) e
+adicionou a arquitetura de animação (`AnimatedVisual`/`DeathEffect`, ver
+[AnimatedVisual e DeathEffect](#animatedvisual-e-deatheffect-phase-06)) por cima do que já estava
+pronto, substituindo os `Tween`s ad-hoc duplicados em `BasicEnemy`/`Dinosaur`/`Egg`/`Projectile`
+por chamadas ao componente compartilhado.
+
+### 1) Main Menu como cena de boot separada
+
+`scenes/MainMenu.tscn` (`Control`, `main_menu.gd`) é agora `project.godot`'s `run/main_scene`
+(era `res://scenes/Main.tscn`). JOGAR chama `get_tree().change_scene_to_file("res://scenes/Main.tscn")`
+— mecanismo **nativo** do Godot, sem framework de cena/transição customizado (explicitamente
+pedido para não criar). `Main.tscn` continua sendo a cena de jogo (não foi renomeada para
+`Game.tscn`/`game.gd`: o custo de tocar ~10 arquivos de teste que referenciam
+`res://scenes/Main.tscn` superava o ganho de clareza de um rename puramente cosmético — "Main"
+já é lido naturalmente como "a cena principal de jogo" agora que `MainMenu` é o verdadeiro ponto
+de entrada do app).
+
+**Sem `GameSession`/autoload:** não avaliado como necessário porque nenhum estado precisa
+atravessar a fronteira menu↔jogo — `Main.tscn` reconstrói tudo do zero (`Economy`, `WaveManager`,
+`EggManager`, ...) toda vez que é instanciada. Voltar ao menu (via `MENU` no overlay de pausa)
+descarta a partida atual — permitido explicitamente nesta fase.
+
+**Preparado para login/perfil futuro sem reestruturar:** `MainMenu` já separa BOOT de JOGO como
+duas cenas independentes — inserir uma tela de LOGIN/PERFIL entre as duas no futuro é só mais uma
+cena e uma troca de `change_scene_to_file()`, sem tocar em `Main.tscn`/`main.gd`. O botão OPÇÕES
+existe na navegação mas não abre nada ainda (`print()` de log) — estrutura pronta, funcionalidade
+fora de escopo.
+
+### 2) HUD: banner único, overlay de pausa, botão de dinossauro
+
+Ver [HUD](#hud) e [Pausa e Velocidade](#pausa-e-velocidade) acima para o detalhamento completo.
+Resumo das mudanças: `WaveCompleteBanner` (Label único-propósito) virou `BannerLabel` +
+`show_banner()`/`hide_banner()` (reutilizável para "WAVE N", "WAVE N COMPLETE! +recompensa" e
+"Coins insuficientes!"); ganhou `PauseOverlay` (PAUSADO/CONTINUAR/MENU) e `GameOverOverlay` ganhou
+um botão MENU; `DinosaurButton` permite recolocar o Velociraptor; rótulos de estado permanente
+ganharam prefixo de emoji (🥚/💰/🦖) com fallback textual completo.
+
+### 3) Placement UX: feedback de coins insuficientes durante o hover, silhueta do dinossauro
+
+`PlacementController.can_afford_selected()` (consulta pura) permite a `PlacementPreview` colorir
+a célula de âmbar quando ela é válida mas o jogador não tem coins suficientes — antes disso só era
+possível descobrir isso ao clicar. `PlacementPreview` também desenha uma silhueta translúcida do
+dinossauro (mesmos pontos do `Placeholder` de `Dinosaur.tscn`, duplicados deliberadamente — ver
+[PlacementPreview](#placementpreview)) tingida pela mesma cor de validade, em vez de só um
+retângulo na célula. `PlacementController.dinosaur_placed` (sinal) é um gancho de feedback para um
+placement bem-sucedido.
+
+### 4) Feedback visual de combate: arquitetura de animação (não apenas polimento pontual)
+
+O maior bloco de trabalho novo desta fase — ver
+[AnimatedVisual e DeathEffect](#animatedvisual-e-deatheffect-phase-06) para o detalhamento
+completo. Resumo: toda entidade visual ganhou um node `Visual` com o script `AnimatedVisual`
+(antes, um `Node2D` neutro — exceto `BasicEnemy`, que não tinha nem esse wrapper e precisou ser
+reestruturado nesta fase para ganhar um, alinhando com o padrão já usado por
+`Dinosaur`/`Egg`/`Projectile` desde a Phase 0.4/0.5). Gameplay só chama
+`play_state(IDLE/MOVE/ATTACK/HIT/DEATH)`; hoje isso é realizado por `Tween`s procedurais (sem
+arte final), e no futuro por um `AnimatedSprite2D` com `SpriteFrames` reais, sem mudar nenhuma
+linha de código de gameplay. Morte/chegada ao ninho/impacto de projétil ganharam um efeito visual
+desacoplado (`DeathEffect`) que nunca atrasa a remoção real da entidade.
+
+### 5) Placeholder visual do Dinosaur trocado (silhueta + cor tingida de verdade)
+
+Ver [Cenas](#cenas-scenes) e o detalhamento em [Dinosaur](#dinosaur) — triângulo simples trocado
+por uma silhueta de 6 pontos; `DinosaurDefinition.placeholder_color` finalmente conectado (via
+`AnimatedVisual.set_base_modulate()`, não mais um campo "preparado mas não usado" como registrado
+na Phase 0.4); cor trocada de verde para laranja por contraste contra o tingimento de debug de
+células BUILDABLE (ver [Hierarquia Visual](#hierarquia-visual-phase-06)).
+
+### Hierarquia Visual (Phase 0.6)
+
+Checagem de contraste entre os tingimentos de debug da grid (`GridManager`) e as cores reais de
+entidades, para garantir que PATH/BUILDABLE/OBSTACLE/EGG/NEST/SPAWN sejam distinguíveis de
+DINOSAUR/ENEMY à primeira vista:
+
+| Elemento | Cor | Nota |
+|---|---|---|
+| PATH (debug) | marrom | |
+| BUILDABLE (debug) | verde | |
+| OBSTACLE (debug) | vermelho escuro | |
+| EGG (debug) | amarelo | reforça visualmente o `Egg` real (também amarelo) na mesma posição |
+| SPAWN (debug) | azul | |
+| NEST (debug) | roxo | |
+| DINOSAUR (`Dinosaur.tscn`) | **laranja** (era verde) | trocado nesta fase — verde colidia com o tingimento de BUILDABLE |
+| ENEMY (`BasicEnemy.tscn`) | vermelho-alaranjado | inalterado, já suficientemente distinto |
+| Projectile | amarelo-claro | inalterado |
+| DeathEffect | bege claro/neutro | novo nesta fase, deliberadamente neutro (não compete com nenhuma cor de entidade) |
+
+Nenhuma outra mudança de cor foi necessária — as demais combinações já tinham contraste
+suficiente por inspeção do código (não verificado visualmente em tela real, ver
+[Limitações — validação manual](#17-teste-manual-obrigatório) abaixo).
+
+### 6) Ganchos de áudio (documentados, não implementados)
+
+Nenhum sistema de áudio foi implementado (fora de escopo explícito). Pontos exatos onde efeitos
+sonoros devem ser conectados no futuro, mapeados para sinais/eventos que já existem:
+
+| Efeito pedido | Gancho |
+|---|---|
+| click (UI) | `pressed` nativo de cada `Button` da HUD/MainMenu |
+| placement | `PlacementController.dinosaur_placed` |
+| shot | `Dinosaur.fired` |
+| hit | `Projectile.impacted` / `BasicEnemy.damaged` |
+| death | `BasicEnemy.died` |
+| wave start | `WaveManager.wave_started` |
+| wave complete | `WaveManager.wave_completed` |
+| egg hit | `Egg.damaged` |
+| game over | `EggManager.all_eggs_destroyed` |
+
+Nenhum placeholder sonoro foi adicionado — o projeto não tem nenhum asset de áudio ainda, e gerar
+um só para preencher esta tabela seria inventar conteúdo fora do escopo pedido.
+
+### 7) Teste manual obrigatório
+
+**Não foi possível realizar um playthrough manual interativo real no editor Godot nesta sessão**
+— o agente que implementou esta fase não tem um loop de interação visual/mouse/teclado com o
+editor rodando (só execução headless via linha de comando). O que FOI validado de fato:
+compile-check individual de todo `.gd` do projeto, as 16 suítes de teste automatizado (incluindo
+dois testes de integração que instanciam `Main.tscn` real e simulam um loop de jogo completo
+ponta a ponta via `step(delta)` determinístico), `--quit-after N` tanto em `MainMenu.tscn` (cena
+de boot real) quanto em `Main.tscn` (cena de jogo, onde toda a animação nova roda) sem nenhum
+`ERROR`/`WARNING`, e um scan completo do editor (`--editor --quit`) sem erro de parsing em
+nenhuma cena/script/resource. Isso cobre corretude lógica e ausência de erros/leaks, mas **não**
+substitui observar o jogo rodando numa tela de verdade (legibilidade de cores, sensação das
+animações, tamanho de botões ao toque, etc.) — ver limitação equivalente no relatório final desta
+fase.
+
+### Bug real encontrado e corrigido nesta fase (não introduzido por este trabalho — pré-existente, nunca validado)
+
+`placement_preview.gd`'s `_DINOSAUR_SHAPE` foi originalmente escrito como
+`const _DINOSAUR_SHAPE := PackedVector2Array([Vector2(...), ...])` — um array-literal-dentro-de-
+`PackedVector2Array()` não é reconhecido pelo GDScript como expressão constante, causando
+`SCRIPT ERROR: Parse Error: Assigned value for constant "_DINOSAUR_SHAPE" isn't a constant
+expression` e quebrando a compilação de **qualquer** script que dependesse dele (`main.gd`
+inclusive, por cascata). Só foi detectado ao rodar `run_tests.ps1` de verdade nesta sessão —
+reforça, de novo, por que a Phase 0.2.1 existe (compile-check individual de cada script antes de
+rodar qualquer teste). Corrigido com o mesmo padrão já estabelecido desde a Phase 0.2
+(`const X: Array[Vector2] = [...]`, tipo explícito em vez de conversão para tipo Packed).
+
+## Decisões técnicas — Phase 0.6
+
+- **`Main.tscn`/`main.gd` não foram renomeados** apesar de `MainMenu` agora ser a cena de boot —
+  ver [item 1](#1-main-menu-como-cena-de-boot-separada) acima; custo/risco do rename (tocar todos
+  os testes que carregam `res://scenes/Main.tscn`) não compensava o ganho puramente cosmético.
+- **Sem `GameSession`/autoload** — nenhum estado atravessa a fronteira menu↔jogo; `Main.tscn` é
+  auto-suficiente. Reavaliar só se uma fase futura precisar preservar progresso entre partidas.
+- **`AnimatedVisual` como componente compartilhado, não lógica duplicada por entidade** — a Phase
+  0.6 original (antes da interrupção) tinha `Tween`s quase idênticos escritos separadamente em
+  `BasicEnemy`/`Dinosaur`/`Egg`/`Projectile`; extraído para um componente único ao implementar a
+  arquitetura de animação, não é abstração prematura (resolve duplicação real que já existia) nem
+  Strategy Pattern (é um `Node2D` com um `match` interno, mesmo espírito de `Targeting`).
+- **`DeathEffect` como node irmão autônomo, não atraso do `queue_free()` da entidade real** — ver
+  [AnimatedVisual e DeathEffect](#animatedvisual-e-deatheffect-phase-06) para o racional completo
+  (risco de travar testes headless que não bombeiam frames reais depois da morte).
+- **`Egg` não usa o estado DEATH de `AnimatedVisual`** — usar um estado que faz o node desaparecer
+  seria incorreto para uma entidade que deve continuar visível (cinza) depois de destruída.
+- **Botão de dinossauro na HUD permite múltiplos placements** — não é profundidade de jogo nova,
+  só expõe pela UI uma capacidade que `PlacementController.select_dinosaur()` já suportava desde a
+  Phase 0.4 (ver [HUD](#hud)).
+- **Nenhum placeholder de áudio foi criado** — o projeto não tem nenhum asset sonoro ainda; a
+  tabela de ganchos (ver acima) documenta os pontos de integração futuros sem inventar conteúdo.

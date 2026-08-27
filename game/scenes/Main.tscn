@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/map/grid_manager.gd" id="2"]
@@ -6,6 +6,15 @@
 [ext_resource type="Script" path="res://scripts/input/input_manager.gd" id="4"]
 [ext_resource type="Script" path="res://scripts/enemies/enemy_spawner.gd" id="5"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/BasicEnemy.tscn" id="6"]
+[ext_resource type="Script" path="res://scripts/placement/placement_controller.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/placement/placement_preview.gd" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/dinosaurs/Dinosaur.tscn" id="9"]
+[ext_resource type="Resource" path="res://data/dinosaurs/velociraptor.tres" id="10"]
+[ext_resource type="Script" path="res://scripts/economy/economy.gd" id="11"]
+[ext_resource type="Script" path="res://scripts/eggs/egg_manager.gd" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/eggs/Egg.tscn" id="13"]
+[ext_resource type="Script" path="res://scripts/waves/wave_manager.gd" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/ui/HUD.tscn" id="15"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1")
@@ -21,3 +30,28 @@ script = ExtResource("4")
 [node name="EnemySpawner" type="Node" parent="."]
 script = ExtResource("5")
 enemy_scene = ExtResource("6")
+
+[node name="Dinosaurs" type="Node2D" parent="."]
+
+[node name="Projectiles" type="Node2D" parent="."]
+
+[node name="PlacementController" type="Node" parent="."]
+script = ExtResource("7")
+dinosaur_scene = ExtResource("9")
+initial_definition = ExtResource("10")
+
+[node name="PlacementPreview" type="Node2D" parent="."]
+script = ExtResource("8")
+
+[node name="Economy" type="Node" parent="."]
+script = ExtResource("11")
+starting_coins = 150
+
+[node name="EggManager" type="Node" parent="."]
+script = ExtResource("12")
+egg_scene = ExtResource("13")
+
+[node name="WaveManager" type="Node" parent="."]
+script = ExtResource("14")
+
+[node name="HUD" parent="." instance=ExtResource("15")]

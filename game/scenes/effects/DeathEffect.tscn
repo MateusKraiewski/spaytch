@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/visuals/death_effect.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/visuals/animated_visual.gd" id="2"]
+
+[node name="DeathEffect" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Visual" type="Node2D" parent="."]
+script = ExtResource("2")
+
+[node name="Placeholder" type="Polygon2D" parent="Visual"]
+color = Color(1, 0.95, 0.75, 0.9)
+polygon = PackedVector2Array(0, -8, 5, 0, 0, 8, -5, 0)

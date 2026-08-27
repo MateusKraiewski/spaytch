@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="WaveDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/waves/wave_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+enemy_count = 8
+spawn_interval = 0.9
+reward_per_kill = 6
+wave_completion_reward = 25
+speed_override = -1.0
+hp_override = -1

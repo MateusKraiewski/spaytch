@@ -89,7 +89,19 @@ $testFiles = @(
     "res://tests/map_tests.gd",
     "res://tests/path_tests.gd",
     "res://tests/enemy_tests.gd",
-    "res://tests/integration_tests.gd"
+    "res://tests/integration_tests.gd",
+    "res://tests/dinosaur_definition_tests.gd",
+    "res://tests/placement_tests.gd",
+    "res://tests/targeting_tests.gd",
+    "res://tests/dinosaur_tests.gd",
+    "res://tests/projectile_tests.gd",
+    "res://tests/combat_integration_tests.gd",
+    "res://tests/economy_tests.gd",
+    "res://tests/egg_tests.gd",
+    "res://tests/wave_tests.gd",
+    "res://tests/game_loop_integration_tests.gd",
+    "res://tests/ux_tests.gd",
+    "res://tests/animated_visual_tests.gd"
 )
 $testFailures = @()
 foreach ($test in $testFiles) {

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DinosaurDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/dinosaurs/dinosaur_definition.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/combat/Projectile.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Velociraptor"
+range = 150.0
+attack_interval = 0.6
+damage = 8
+projectile_speed = 300.0
+projectile_scene = ExtResource("2")
+placeholder_color = Color(0.95, 0.55, 0.15, 1)
+cost = 20

@@ -1,0 +1,186 @@
+extends SceneTree
+## Testes determinísticos de Egg (hp/dano/destruição) e EggManager (deriva
+## posições de MapDefinition, regra determinística de seleção, detecção de
+## "todos destruídos", reação a EnemySpawner.enemy_reached_nest).
+##
+## Executar com:
+##   godot --headless --path game --script res://tests/egg_tests.gd
+
+var _failures: int = 0
+var _to_free: Array = []
+
+
+func _initialize() -> void:
+	_test_egg_hp_after_initialize()
+	_test_egg_take_damage_reduces_hp()
+	_test_egg_is_destroyed_at_zero_hp()
+	_test_egg_damaged_signal()
+	_test_egg_destroyed_signal()
+	_test_egg_no_damage_after_destroyed()
+
+	_test_egg_manager_derives_positions_from_map()
+	_test_egg_manager_all_destroyed_false_initially()
+	_test_egg_manager_deterministic_selection()
+	_test_egg_manager_all_destroyed_true_when_all_dead()
+	_test_egg_manager_enemy_reached_nest_damages_next_egg()
+
+	for obj in _to_free:
+		if is_instance_valid(obj):
+			obj.free()
+
+	if _failures == 0:
+		print("[egg_tests] ALL TESTS PASSED")
+	else:
+		print("[egg_tests] %d TEST(S) FAILED" % _failures)
+	quit(1 if _failures > 0 else 0)
+
+
+func _check(condition: bool, message: String) -> void:
+	if not condition:
+		_failures += 1
+		printerr("[egg_tests] FAIL: %s" % message)
+
+
+func _track(obj: Object) -> Object:
+	_to_free.append(obj)
+	return obj
+
+
+func _make_egg(max_hp: int = 30) -> Egg:
+	var egg := Egg.new()
+	egg.max_hp = max_hp
+	egg.initialize(Vector2i.ZERO)
+	return _track(egg) as Egg
+
+
+# ---- Egg ----
+
+func _test_egg_hp_after_initialize() -> void:
+	var egg := _make_egg(40)
+	_check(egg.hp == 40, "hp should equal max_hp after initialize, got %d" % egg.hp)
+	_check(not egg.is_destroyed(), "fresh egg should not be destroyed")
+
+
+func _test_egg_take_damage_reduces_hp() -> void:
+	var egg := _make_egg(40)
+	egg.take_damage(15)
+	_check(egg.hp == 25, "hp should decrease by damage amount, got %d" % egg.hp)
+
+
+func _test_egg_is_destroyed_at_zero_hp() -> void:
+	var egg := _make_egg(10)
+	egg.take_damage(10)
+	_check(egg.is_destroyed(), "egg should be destroyed at 0 hp")
+	_check(egg.hp == 0, "hp should not go negative, got %d" % egg.hp)
+
+
+func _test_egg_damaged_signal() -> void:
+	var egg := _make_egg(30)
+	var received := [false]
+	egg.damaged.connect(func(_e: Egg, _amount: int) -> void: received[0] = true)
+	egg.take_damage(5)
+	_check(received[0], "damaged signal should be emitted")
+
+
+func _test_egg_destroyed_signal() -> void:
+	var egg := _make_egg(10)
+	var received := [false]
+	egg.destroyed.connect(func(_e: Egg) -> void: received[0] = true)
+	egg.take_damage(10)
+	_check(received[0], "destroyed signal should be emitted at 0 hp")
+
+
+func _test_egg_no_damage_after_destroyed() -> void:
+	var egg := _make_egg(10)
+	egg.take_damage(10)
+	var destroy_count := [0]
+	egg.destroyed.connect(func(_e: Egg) -> void: destroy_count[0] += 1)
+	egg.take_damage(5)  # já destruído — não deveria fazer nada
+	_check(destroy_count[0] == 0, "destroyed should not fire again on an already-destroyed egg")
+	_check(egg.hp == 0, "hp should remain 0")
+
+
+# ---- EggManager ----
+
+func _make_map_with_eggs(count: int) -> MapDefinition:
+	var definition := MapDefinition.new()
+	definition.width = count
+	definition.height = 1
+	definition.tile_size = 32
+	var cells := PackedInt32Array()
+	cells.resize(count)
+	cells.fill(CellType.EGG)
+	definition.cells = cells
+	return definition
+
+
+func _make_egg_manager(definition: MapDefinition, enemy_spawner: EnemySpawner) -> EggManager:
+	var manager := EggManager.new()
+	manager.egg_scene = load("res://scenes/eggs/Egg.tscn") as PackedScene
+	manager.setup(definition, Grid.new(definition), enemy_spawner)
+	return _track(manager) as EggManager
+
+
+func _test_egg_manager_derives_positions_from_map() -> void:
+	var definition := _make_map_with_eggs(3)
+	var spawner := _track(EnemySpawner.new()) as EnemySpawner
+	var manager := _make_egg_manager(definition, spawner)
+	_check(manager.get_eggs().size() == 3, "should create exactly 3 eggs, got %d" % manager.get_eggs().size())
+	_check(manager.get_eggs()[0].coord == Vector2i(0, 0), "first egg should be at (0,0)")
+	_check(manager.get_eggs()[2].coord == Vector2i(2, 0), "third egg should be at (2,0)")
+
+
+func _test_egg_manager_all_destroyed_false_initially() -> void:
+	var definition := _make_map_with_eggs(2)
+	var spawner := _track(EnemySpawner.new()) as EnemySpawner
+	var manager := _make_egg_manager(definition, spawner)
+	_check(not manager.all_destroyed(), "should not be all destroyed right after creation")
+
+
+## Chama _damage_next_egg() diretamente (método "privado" por convenção,
+## não por imposição do GDScript) para isolar a regra de seleção do
+## mecanismo de disparo (enemy_reached_nest) — esse mecanismo já é testado
+## separadamente logo abaixo.
+func _test_egg_manager_deterministic_selection() -> void:
+	var definition := _make_map_with_eggs(2)
+	var spawner := _track(EnemySpawner.new()) as EnemySpawner
+	var manager := _make_egg_manager(definition, spawner)
+	var eggs := manager.get_eggs()
+
+	manager._damage_next_egg(30)  # hp default do Egg é 30 — destrói o primeiro
+	_check(eggs[0].is_destroyed(), "first egg should be destroyed by the first damage batch")
+	_check(not eggs[1].is_destroyed(), "second egg should still be alive")
+
+	manager._damage_next_egg(30)
+	_check(eggs[1].is_destroyed(), "second egg should be destroyed once the first is gone")
+
+
+func _test_egg_manager_all_destroyed_true_when_all_dead() -> void:
+	var definition := _make_map_with_eggs(1)
+	var spawner := _track(EnemySpawner.new()) as EnemySpawner
+	var manager := _make_egg_manager(definition, spawner)
+	var received := [false]
+	manager.all_eggs_destroyed.connect(func() -> void: received[0] = true)
+	manager._damage_next_egg(9999)
+	_check(manager.all_destroyed(), "all_destroyed() should be true when the only egg is destroyed")
+	_check(received[0], "all_eggs_destroyed signal should be emitted")
+
+
+func _test_egg_manager_enemy_reached_nest_damages_next_egg() -> void:
+	var definition := _make_map_with_eggs(1)
+	var spawner := _track(EnemySpawner.new()) as EnemySpawner
+	var manager := _make_egg_manager(definition, spawner)
+	var egg := manager.get_eggs()[0]
+	var initial_hp := egg.hp
+
+	var enemy := BasicEnemy.new()
+	enemy.egg_damage = 7
+	enemy.initialize([Vector2(0, 0), Vector2(1, 0)])
+
+	# EggManager._on_enemy_reached_nest() já chama enemy.queue_free() —
+	# não registramos `enemy` em _to_free (evita double-free: queue_free()
+	# é diferido, então .free() manual depois poderia coincidir com ele).
+	spawner.enemy_reached_nest.emit(enemy)
+
+	_check(egg.hp == initial_hp - 7,
+		"egg should take enemy.egg_damage when enemy reaches the nest, got %d" % egg.hp)

@@ -57,8 +57,23 @@ organização de spritesheets/atlases.*
 
 ## Animações
 
-*TBD — frame rate de animação, convenções de nomenclatura de estados de animação, uso de
-`AnimationPlayer` vs. `AnimatedSprite2D`.*
+**Decidido (Phase 0.6):** nenhuma entidade do jogo (dinossauro, inimigo, ovo, projétil) fica
+visualmente estática como solução definitiva — toda entidade visual tem 5 estados de animação
+padronizados: **IDLE, MOVE, ATTACK, HIT, DEATH**. A superfície que gameplay usa é
+`AnimatedVisual.play_state(state)` (`scripts/visuals/animated_visual.gd`), que nunca expõe COMO a
+animação é realizada por baixo — ver [ARCHITECTURE.md](ARCHITECTURE.md#animatedvisual-e-deatheffect-phase-06)
+para o detalhamento técnico completo.
+
+Convenção de nomenclatura fixada para quando a arte final chegar: um `AnimatedSprite2D` filho do
+node `Visual` de cada entidade, com um `SpriteFrames` contendo animações nomeadas exatamente
+`"idle"`, `"move"`, `"attack"`, `"hit"`, `"death"` (minúsculas). Assim que essas animações
+existirem, elas substituem automaticamente o fallback procedural atual (`Tween` sobre
+`rotation`/`scale`/`modulate`, usado hoje por não haver pixel art final) — nenhuma linha de código
+de gameplay precisa mudar.
+
+*Ainda TBD: frame rate de animação da arte final, número de frames por estado, se
+`AnimationPlayer` (em vez de `AnimatedSprite2D`) faz mais sentido para algum caso específico
+(ex: animações compostas com mais de um sprite).*
 
 ## Paleta
 

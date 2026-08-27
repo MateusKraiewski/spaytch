@@ -69,6 +69,12 @@ de HP genérica.
 - **FUTURE/TBD:** diferentes tipos de ovos com propriedades próprias. Não definido em detalhes
   neste momento — apenas registrado como possibilidade futura.
 
+**Implementado (Phase 0.5):** os ovos já são objetos reais de jogo, com HP próprio. Nesta
+primeira versão, um inimigo que alcança o ninho **causa dano** ao ovo (não ainda o "roubo"
+descrito acima — isso continua `FUTURE/TBD`); quando todos os ovos de uma partida são destruídos,
+a partida termina (GAME_OVER). Valores de HP/dano são técnicos e provisórios — ver
+[ARCHITECTURE.md](ARCHITECTURE.md), não definitivos de design.
+
 ## Player Experience
 
 *TBD — como a filosofia de design (acima) se traduz em sensação momento-a-momento: tensão,
@@ -103,7 +109,13 @@ Cada dinossauro deve ter uma identidade de gameplay própria, não apenas varia�
 - Defesa
 - Debuff
 
-Nenhum dinossauro específico, número de dano, alcance, custo ou cooldown foi definido ainda.
+Nenhum outro dinossauro específico foi definido ainda além do Velociraptor.
+
+**Velociraptor** é o primeiro dinossauro concreto do jogo (primeiro vertical slice do sistema de
+torres — Phase 0.4): papel **DPS**, alcance médio, ataque rápido baseado em projétil, dano
+baixo/médio, targeting inicial FIRST (maior progresso no caminho), sem habilidade especial e sem
+upgrades nesta fase. Números exatos de balanceamento (dano, alcance, cooldown) são técnicos e
+provisórios — ver [ARCHITECTURE.md](ARCHITECTURE.md), não definitivos de design.
 
 ## Enemies
 
@@ -125,6 +137,11 @@ Nenhum inimigo específico ou estatística foi definido ainda.
 
 Ondas devem ser **progressivamente mais difíceis** ao longo de uma partida (ver Core Gameplay).
 Estrutura detalhada de ritmo, composição e escalonamento: *TBD.*
+
+**Implementado (Phase 0.5):** existem 3 ondas técnicas de teste (5, 8 e 10 inimigos, com
+intervalo de spawn decrescente) — o jogador inicia cada onda manualmente pela HUD, nunca
+automático. São dados de validação do sistema, não conteúdo final de design; composição
+(sempre o mesmo tipo de inimigo), ritmo e progressão de dificuldade reais ainda são `TBD`.
 
 ## Maps
 
@@ -163,6 +180,13 @@ Economia gira em torno de recursos ganhos **durante as partidas**.
 **Fora de escopo neste momento:** loja, monetização, gacha, sistemas de energia. Não devem ser
 projetados nem implementados sem decisão explícita futura.
 
+**Implementado (Phase 0.5):** a moeda **coins** existe de verdade dentro de uma partida — o
+jogador começa com uma quantidade inicial, gasta coins para posicionar o Velociraptor, e ganha
+coins ao matar inimigos e ao completar uma onda (as duas primeiras fontes da lista acima).
+"Objetivos" e "sistemas de recompensa futuros" continuam `TBD`. Nenhuma persistência entre
+partidas — coins zeram a cada nova sessão do jogo. Valores exatos (quantidade inicial, custo do
+Velociraptor, recompensas) são técnicos e provisórios — ver [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Progression
 
 Há intenção de permitir **evolução dos dinossauros** por especialização, não apenas aumento
@@ -191,7 +215,13 @@ Este é um conceito de design provisório. Árvores de especialização reais, c
 
 ## UI/UX
 
-*TBD.*
+**Implementado (Phase 0.6):** o jogo abre numa tela de título (Main Menu) — "SPAYTCH" / "Ovos de
+Dinossauro Defense" — com JOGAR/OPÇÕES/SAIR, antes de entrar na partida propriamente dita. Uma
+tela de LOGIN/PERFIL não existe ainda (nem autenticação real — fora de escopo), mas a estrutura já
+comporta inserir isso entre o Main Menu e o jogo no futuro sem reestruturar. Detalhes técnicos em
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
+Restante (fluxos de tela detalhados, iconografia, tom de copy): *TBD.*
 
 ## Audio
 

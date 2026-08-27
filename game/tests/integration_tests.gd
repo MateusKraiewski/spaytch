@@ -5,6 +5,14 @@ extends SceneTree
 ## construído, um BasicEnemy nasce no SPAWN, percorre o caminho e emite
 ## reached_nest.
 ##
+## Desde a Phase 0.5, Main._ready() não spawna mais um inimigo sozinho —
+## spawning é responsabilidade exclusiva de WaveManager, disparado pelo
+## jogador via HUD (ver game_loop_integration_tests.gd para o fluxo de wave
+## completo). Este teste continua validando especificamente o encanamento
+## MapPath -> EnemySpawner -> BasicEnemy na cena real, chamando
+## spawner.spawn_enemy() diretamente em vez de depender de um spawn
+## automático que não existe mais.
+##
 ## Diferente de path_tests.gd e enemy_tests.gd (lógica pura isolada), este
 ## teste instancia a cena real. Para avançar no tempo, chama
 ## BasicEnemy.step(delta) diretamente em vez de depender de frames reais de
@@ -64,10 +72,12 @@ func _initialize() -> void:
 	var reached_holder := [false]
 	spawner.enemy_reached_nest.connect(func(_enemy: BasicEnemy) -> void: reached_holder[0] = true)
 
-	root.add_child(main)  # dispara _ready() em cascata -> spawn real via Main.gd
+	root.add_child(main)  # dispara _ready() em cascata -> EnemySpawner.setup() real via Main.gd
 	await process_frame  # garante que NOTIFICATION_READY já foi entregue (ver comentário acima)
 
-	_check(spawned_enemy_holder[0] != null, "EnemySpawner should have spawned a BasicEnemy on Main._ready()")
+	spawner.spawn_enemy()  # Phase 0.5: spawn não é mais automático — chamado direto para este teste
+
+	_check(spawned_enemy_holder[0] != null, "spawn_enemy() should have produced a BasicEnemy via the signal")
 
 	if spawned_enemy_holder[0] != null:
 		var spawned_enemy: BasicEnemy = spawned_enemy_holder[0]

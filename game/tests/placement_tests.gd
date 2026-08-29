@@ -30,6 +30,8 @@ func _initialize() -> void:
 	_test_empty_is_invalid()
 	_test_occupied_buildable_is_invalid()
 	_test_out_of_bounds_is_invalid()
+	_test_empty_cell_has_no_occupant()
+	_test_placed_cell_occupant_matches_instantiated_dinosaur()
 	_test_place_marks_cell_occupied_and_instantiates_dinosaur()
 	_test_place_on_invalid_cell_does_nothing()
 	_test_place_deducts_cost()
@@ -139,7 +141,7 @@ func _test_empty_is_invalid() -> void:
 
 func _test_occupied_buildable_is_invalid() -> void:
 	var grid := _make_single_cell_grid(CellType.BUILDABLE)
-	grid.get_cell(Vector2i(0, 0)).occupied = true
+	grid.get_cell(Vector2i(0, 0)).occupant = _track(Dinosaur.new()) as Dinosaur
 	var controller := _controller_for(grid)
 	_check(not controller.is_valid_placement(Vector2i(0, 0)),
 		"BUILDABLE já ocupado deveria ser inválido")
@@ -166,12 +168,43 @@ func _test_place_marks_cell_occupied_and_instantiates_dinosaur() -> void:
 
 	controller.on_pointer_pressed(grid.cell_center_world(Vector2i(0, 0)))
 
-	_check(grid.get_cell(Vector2i(0, 0)).occupied, "célula deveria ficar ocupada após colocar")
+	_check(grid.get_cell(Vector2i(0, 0)).is_occupied(), "célula deveria ficar ocupada após colocar")
 	_check(dinosaurs.get_child_count() == 1, "deveria ter instanciado exatamente 1 Dinosaur")
 	_check(controller.state == PlacementController.State.IDLE,
 		"deveria voltar para IDLE após colocar")
 	_check(controller.selected_definition == null,
 		"seleção deveria ser limpa após colocar")
+
+
+## Sprint 1, Etapa 3 — uma célula recém-criada (nenhum placement ainda) não deve ter ocupante
+## nenhum: `occupant == null` e `is_occupied() == false` continuam se comportando como o antigo
+## `occupied = false` padrão, sem exigir nenhuma inicialização extra em Grid/Cell.
+func _test_empty_cell_has_no_occupant() -> void:
+	var grid := _make_single_cell_grid(CellType.BUILDABLE)
+	var cell := grid.get_cell(Vector2i(0, 0))
+	_check(cell.occupant == null, "célula recém-criada não deveria ter occupant")
+	_check(not cell.is_occupied(), "célula recém-criada não deveria estar ocupada")
+
+
+## Sprint 1, Etapa 3 — o motivo real desta etapa: `cell.occupant` precisa ser o MESMO Dinosaur
+## instanciado pelo placement (identidade, não só um bool), para a regra de fusão (Etapa 5)
+## conseguir ler `species_id`/`tier` de quem já está na célula.
+func _test_placed_cell_occupant_matches_instantiated_dinosaur() -> void:
+	var grid := _make_single_cell_grid(CellType.BUILDABLE)
+	var dinosaurs := _make_container()
+	var controller := _track(PlacementController.new()) as PlacementController
+	controller.dinosaur_scene = load("res://scenes/dinosaurs/Dinosaur.tscn") as PackedScene
+	controller.setup(grid, _make_enemy_spawner(), dinosaurs, _make_container(), _make_economy())
+
+	controller.select_dinosaur(_make_definition())
+	controller.on_pointer_pressed(grid.cell_center_world(Vector2i(0, 0)))
+
+	var cell := grid.get_cell(Vector2i(0, 0))
+	_check(cell.occupant != null, "célula deveria ter um occupant depois do placement")
+	_check(dinosaurs.get_child_count() == 1, "deveria ter instanciado exatamente 1 Dinosaur")
+	if dinosaurs.get_child_count() > 0:
+		_check(cell.occupant == dinosaurs.get_child(0),
+			"cell.occupant deveria ser a MESMA instância de Dinosaur colocada, não uma cópia/outro objeto")
 
 
 func _test_place_on_invalid_cell_does_nothing() -> void:
@@ -220,7 +253,7 @@ func _test_place_fails_without_enough_coins() -> void:
 
 	_check(dinosaurs.get_child_count() == 0,
 		"placement should not happen without enough coins")
-	_check(not grid.get_cell(Vector2i(0, 0)).occupied,
+	_check(not grid.get_cell(Vector2i(0, 0)).is_occupied(),
 		"cell should not be marked occupied when placement fails for insufficient coins")
 	_check(controller.state == PlacementController.State.PLACING,
 		"should remain in PLACING to allow another attempt")

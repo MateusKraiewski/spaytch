@@ -1,7 +1,7 @@
 class_name Economy
 extends Node
 ## Recurso de partida (`coins`) — estado runtime mutável, não `Resource`
-## (mesmo raciocínio já aplicado a `Cell.occupied`: dado que muda durante o
+## (mesmo raciocínio já aplicado a `Cell.occupant`: dado que muda durante o
 ## jogo não deve viver num Resource potencialmente compartilhado). Só
 ## `starting_coins` é configuração (`@export`, mesmo padrão de
 ## `GridManager.map_definition`).

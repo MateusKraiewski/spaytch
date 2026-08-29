@@ -15,6 +15,14 @@ extends Node2D
 
 signal fired(dinosaur: Dinosaur, projectile: Projectile)  ## Phase 0.5 — gancho para feedback visual
 
+## Bug report do jogador — sprites de T2/T3 (arte PixelLab) são bem maiores que a célula 32x32
+## onde o dinossauro é registrado (T3 ~176px, quase 6x a célula); colocar vários lado a lado ficava
+## visualmente uma bagunça de sprites empilhados. Reduz só a EXIBIÇÃO (AnimatedVisual.scale), não a
+## célula/hitbox lógica nem `DinosaurDefinition` — Fusion/Targeting/custo continuam inteiramente
+## inalterados. Só se aplica a espécies com `sprite_frames` de verdade (ver setup() abaixo); o
+## Velociraptor procedural antigo (sprite_frames sempre null) continua no tamanho de sempre.
+const _DISPLAY_SCALE := 0.65
+
 @export var definition: DinosaurDefinition
 
 @onready var _visual: AnimatedVisual = $Visual
@@ -31,11 +39,22 @@ var _cooldown_remaining: float = 0.0
 ## continua fazendo sentido). Dinossauros nunca se movem nesta fase — só
 ## IDLE (com o "pop" de spawn embutido em AnimatedVisual) e ATTACK ao
 ## disparar, nunca MOVE.
+##
+## Sprint 1 (integração visual) — `definition.sprite_frames` (Etapa 2) troca a arte do
+## AnimatedSprite2D ANTES do play_state(IDLE), pra "idle" já resolver pra dentro do
+## SpriteFrames certo. `null` (Velociraptor procedural antigo, e qualquer .tres futuro sem arte
+## ainda) simplesmente não troca nada — a cena mantém a arte que já tinha hardcoded, mesmo
+## comportamento de sempre. Nenhum `if species_id == ...` aqui: uma espécie nova só precisa
+## preencher `sprite_frames` no próprio `.tres` (Etapa 1-2) pra aparecer certa, sem tocar neste
+## arquivo.
 func setup(p_definition: DinosaurDefinition, enemy_spawner: EnemySpawner, projectiles_container: Node) -> void:
 	definition = p_definition
 	_enemy_spawner = enemy_spawner
 	_projectiles_container = projectiles_container
 	if _visual != null and definition != null:
+		if definition.sprite_frames != null:
+			_visual.set_sprite_frames(definition.sprite_frames)
+			_visual.set_display_scale(_DISPLAY_SCALE)
 		_visual.set_base_modulate(definition.placeholder_color)
 		_visual.play_state(AnimatedVisual.State.IDLE)
 

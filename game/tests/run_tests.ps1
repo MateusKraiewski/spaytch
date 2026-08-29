@@ -107,8 +107,14 @@ $testFiles = @(
     "res://tests/velociraptor_assets_tests.gd",
     "res://tests/basic_enemy_assets_tests.gd",
     "res://tests/egg_projectile_assets_tests.gd",
-    "res://tests/spawn_effect_assets_tests.gd"
+    "res://tests/spawn_effect_assets_tests.gd",
+    "res://tests/aura_effect_assets_tests.gd",
+    "res://tests/fusion_tests.gd",
+    "res://tests/dinosaur_aura_tests.gd",
+    "res://tests/dinosaur_visual_tests.gd"
 )
+# fusion_tests.gd e game_loop_integration_tests.gd já estão na lista acima (Etapas 5/4) — a
+# Etapa 7 só adicionou casos novos DENTRO desses mesmos arquivos, não exige entrada nova aqui.
 $testFailures = @()
 foreach ($test in $testFiles) {
     Write-Host "-- $test --"

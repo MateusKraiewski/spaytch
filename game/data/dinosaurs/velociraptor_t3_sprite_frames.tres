@@ -1,0 +1,14 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/velociraptor_t3/idle_0.png" id="1_tcewk"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_tcewk")
+}],
+"loop": 1,
+"name": &"idle",
+"speed": 1.0
+}]

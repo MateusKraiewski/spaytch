@@ -1,0 +1,181 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/attack_0.png" id="1_7wv3g"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/attack_1.png" id="2_8pvg2"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/attack_2.png" id="3_y0eqe"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/attack_3.png" id="4_glv5w"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/attack_4.png" id="5_jv6x4"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/attack_5.png" id="6_mk0e0"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/attack_6.png" id="7_7b5ky"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_0.png" id="8_glmlp"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_1.png" id="9_m78jy"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_2.png" id="10_hwir5"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_3.png" id="11_i08tq"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_4.png" id="12_x3cf1"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_5.png" id="13_0x1by"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_6.png" id="14_seaxh"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_7.png" id="15_m0kuf"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/hit_8.png" id="16_owdq2"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_0.png" id="17_npcve"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_1.png" id="18_7pnq2"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_2.png" id="19_n54ag"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_3.png" id="20_eansh"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_4.png" id="21_oqjhr"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_5.png" id="22_eryir"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_6.png" id="23_wejj4"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_7.png" id="24_0oiig"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_8.png" id="25_fw21c"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_9.png" id="26_cn73k"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_10.png" id="27_fxuae"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_11.png" id="28_rexe3"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_12.png" id="29_bbc2h"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_13.png" id="30_aecvv"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_14.png" id="31_pm2t1"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_15.png" id="32_74lst"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/idle_16.png" id="33_sue1f"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/move_0.png" id="34_1b6vh"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/move_1.png" id="35_10qwf"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/move_2.png" id="36_eoqre"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/move_3.png" id="37_3jvpg"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/move_4.png" id="38_l3ca4"]
+[ext_resource type="Texture2D" path="res://assets/dinosaurs/triceratops_t1/move_5.png" id="39_cec7a"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_7wv3g")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_8pvg2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_y0eqe")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_glv5w")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_jv6x4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_mk0e0")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_7b5ky")
+}],
+"loop": 0,
+"name": &"attack",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("8_glmlp")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_m78jy")
+}, {
+"duration": 1.0,
+"texture": ExtResource("10_hwir5")
+}, {
+"duration": 1.0,
+"texture": ExtResource("11_i08tq")
+}, {
+"duration": 1.0,
+"texture": ExtResource("12_x3cf1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("13_0x1by")
+}, {
+"duration": 1.0,
+"texture": ExtResource("14_seaxh")
+}, {
+"duration": 1.0,
+"texture": ExtResource("15_m0kuf")
+}, {
+"duration": 1.0,
+"texture": ExtResource("16_owdq2")
+}],
+"loop": 0,
+"name": &"hit",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("17_npcve")
+}, {
+"duration": 1.0,
+"texture": ExtResource("18_7pnq2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("19_n54ag")
+}, {
+"duration": 1.0,
+"texture": ExtResource("20_eansh")
+}, {
+"duration": 1.0,
+"texture": ExtResource("21_oqjhr")
+}, {
+"duration": 1.0,
+"texture": ExtResource("22_eryir")
+}, {
+"duration": 1.0,
+"texture": ExtResource("23_wejj4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("24_0oiig")
+}, {
+"duration": 1.0,
+"texture": ExtResource("25_fw21c")
+}, {
+"duration": 1.0,
+"texture": ExtResource("26_cn73k")
+}, {
+"duration": 1.0,
+"texture": ExtResource("27_fxuae")
+}, {
+"duration": 1.0,
+"texture": ExtResource("28_rexe3")
+}, {
+"duration": 1.0,
+"texture": ExtResource("29_bbc2h")
+}, {
+"duration": 1.0,
+"texture": ExtResource("30_aecvv")
+}, {
+"duration": 1.0,
+"texture": ExtResource("31_pm2t1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("32_74lst")
+}, {
+"duration": 1.0,
+"texture": ExtResource("33_sue1f")
+}],
+"loop": 1,
+"name": &"idle",
+"speed": 8.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("34_1b6vh")
+}, {
+"duration": 1.0,
+"texture": ExtResource("35_10qwf")
+}, {
+"duration": 1.0,
+"texture": ExtResource("36_eoqre")
+}, {
+"duration": 1.0,
+"texture": ExtResource("37_3jvpg")
+}, {
+"duration": 1.0,
+"texture": ExtResource("38_l3ca4")
+}, {
+"duration": 1.0,
+"texture": ExtResource("39_cec7a")
+}],
+"loop": 1,
+"name": &"move",
+"speed": 8.0
+}]

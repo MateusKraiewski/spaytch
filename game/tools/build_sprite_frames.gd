@@ -20,6 +20,12 @@ func _initialize() -> void:
 	_build_projectile()
 	_build_impact_effect()
 	_build_spawn_effect()
+	_build_aura_t3()
+	_build_velociraptor_t1()
+	_build_velociraptor_t2()
+	_build_velociraptor_t3()
+	_build_triceratops_t1()
+	_build_trex_t1()
 	quit(0)
 
 
@@ -190,6 +196,130 @@ func _build_spawn_effect() -> void:
 	], 11.0, false)
 
 	_save(frames, "res://data/effects/spawn_sprite_frames.tres")
+
+
+## Arte de `AuraEffect.tscn` (Sprint 1 — aura do Velociraptor T3). Animação nomeada "idle" de
+## propósito — reaproveita o contrato de loop contínuo que AnimatedVisual.State.IDLE já tem (ver
+## aura_effect.gd), o mesmo raciocínio de DeathEffect/SpawnEffect reaproveitando State.DEATH para o
+## contrato oposto (um tiro só). fps baixo — é um efeito ambiente, contínuo, não uma reação rápida.
+func _build_aura_t3() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+
+	_add_animation(frames, "idle", [
+		"res://assets/effects/aura_t3_0.png",
+		"res://assets/effects/aura_t3_1.png",
+		"res://assets/effects/aura_t3_2.png",
+		"res://assets/effects/aura_t3_3.png",
+	], 6.0, true)
+
+	_save(frames, "res://data/effects/aura_t3_sprite_frames.tres")
+
+
+## Velociraptor T1 aprovado (pipeline PixelLab, Sprint 1) — arte definitiva desta tier, com as 4
+## animações completas. Pasta própria (`velociraptor_t1/`) para não sobrescrever nem depender do
+## Velociraptor procedural antigo (`velociraptor/`, Checkpoints A-F), que continua intacto e
+## referenciado por `velociraptor_sprite_frames.tres` como estava.
+func _build_velociraptor_t1() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+
+	_add_animation(frames, "idle", [
+		"res://assets/dinosaurs/velociraptor_t1/idle_0.png",
+		"res://assets/dinosaurs/velociraptor_t1/idle_1.png",
+		"res://assets/dinosaurs/velociraptor_t1/idle_2.png",
+		"res://assets/dinosaurs/velociraptor_t1/idle_3.png",
+	], 4.0, true)
+
+	_add_animation(frames, "move", [
+		"res://assets/dinosaurs/velociraptor_t1/move_0.png",
+		"res://assets/dinosaurs/velociraptor_t1/move_1.png",
+		"res://assets/dinosaurs/velociraptor_t1/move_2.png",
+		"res://assets/dinosaurs/velociraptor_t1/move_3.png",
+		"res://assets/dinosaurs/velociraptor_t1/move_4.png",
+		"res://assets/dinosaurs/velociraptor_t1/move_5.png",
+	], 8.0, true)
+
+	_add_animation(frames, "attack", [
+		"res://assets/dinosaurs/velociraptor_t1/attack_0.png",
+		"res://assets/dinosaurs/velociraptor_t1/attack_1.png",
+		"res://assets/dinosaurs/velociraptor_t1/attack_2.png",
+		"res://assets/dinosaurs/velociraptor_t1/attack_3.png",
+		"res://assets/dinosaurs/velociraptor_t1/attack_4.png",
+		"res://assets/dinosaurs/velociraptor_t1/attack_5.png",
+		"res://assets/dinosaurs/velociraptor_t1/attack_6.png",
+	], 12.0, false)
+
+	_add_animation(frames, "hit", [
+		"res://assets/dinosaurs/velociraptor_t1/hit_0.png",
+		"res://assets/dinosaurs/velociraptor_t1/hit_1.png",
+		"res://assets/dinosaurs/velociraptor_t1/hit_2.png",
+		"res://assets/dinosaurs/velociraptor_t1/hit_3.png",
+		"res://assets/dinosaurs/velociraptor_t1/hit_4.png",
+	], 10.0, false)
+
+	_save(frames, "res://data/dinosaurs/velociraptor_t1_sprite_frames.tres")
+
+
+## Velociraptor T2/T3 aprovados — só a pose base (nenhuma animação foi gerada ainda para estas
+## tiers, ver relatório da Etapa 1). Um único frame em "idle" é uma SpriteFrames válida (o
+## AnimatedSprite2D mostra a pose parada) — não é um placeholder quebrado, é exatamente o que foi
+## aprovado até agora; animações completas ficam para quando forem geradas.
+func _build_velociraptor_t2() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	_add_animation(frames, "idle", ["res://assets/dinosaurs/velociraptor_t2/idle_0.png"], 1.0, true)
+	_save(frames, "res://data/dinosaurs/velociraptor_t2_sprite_frames.tres")
+
+
+func _build_velociraptor_t3() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	_add_animation(frames, "idle", ["res://assets/dinosaurs/velociraptor_t3/idle_0.png"], 1.0, true)
+	_save(frames, "res://data/dinosaurs/velociraptor_t3_sprite_frames.tres")
+
+
+## Triceratops T1 aprovado — Idle já com a correção dos 3 chifres (rastreada frame a frame, ver
+## Sprint 1). Move/Attack/Hit existem e foram aceitos "como estão" (paleta corrigida, mas ainda
+## com 1 chifre só) — não são um erro desta etapa, é o estado aprovado.
+func _build_triceratops_t1() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+
+	var idle_paths: Array[String] = []
+	for i in range(17):
+		idle_paths.append("res://assets/dinosaurs/triceratops_t1/idle_%d.png" % i)
+	_add_animation(frames, "idle", idle_paths, 8.0, true)
+
+	_add_animation(frames, "move", [
+		"res://assets/dinosaurs/triceratops_t1/move_0.png",
+		"res://assets/dinosaurs/triceratops_t1/move_1.png",
+		"res://assets/dinosaurs/triceratops_t1/move_2.png",
+		"res://assets/dinosaurs/triceratops_t1/move_3.png",
+		"res://assets/dinosaurs/triceratops_t1/move_4.png",
+		"res://assets/dinosaurs/triceratops_t1/move_5.png",
+	], 8.0, true)
+
+	var attack_paths: Array[String] = []
+	for i in range(7):
+		attack_paths.append("res://assets/dinosaurs/triceratops_t1/attack_%d.png" % i)
+	_add_animation(frames, "attack", attack_paths, 10.0, false)
+
+	var hit_paths: Array[String] = []
+	for i in range(9):
+		hit_paths.append("res://assets/dinosaurs/triceratops_t1/hit_%d.png" % i)
+	_add_animation(frames, "hit", hit_paths, 10.0, false)
+
+	_save(frames, "res://data/dinosaurs/triceratops_t1_sprite_frames.tres")
+
+
+## T-Rex T1 aprovado — só a pose base corrigida (cauda + braços vestigiais), nenhuma animação
+## gerada ainda.
+func _build_trex_t1() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	_add_animation(frames, "idle", ["res://assets/dinosaurs/trex_t1/idle_0.png"], 1.0, true)
+	_save(frames, "res://data/dinosaurs/trex_t1_sprite_frames.tres")
 
 
 func _add_animation(frames: SpriteFrames, anim_name: StringName, texture_paths: Array, fps: float, loop: bool) -> void:

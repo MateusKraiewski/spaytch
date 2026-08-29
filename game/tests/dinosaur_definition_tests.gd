@@ -18,6 +18,7 @@ func _initialize() -> void:
 	_test_velociraptor_projectile_speed_positive()
 	_test_velociraptor_has_projectile_scene()
 	_test_velociraptor_display_name_set()
+	_test_has_aura_only_true_for_tier_3()
 
 	if _failures == 0:
 		print("[dinosaur_definition_tests] ALL TESTS PASSED")
@@ -68,3 +69,21 @@ func _test_velociraptor_has_projectile_scene() -> void:
 func _test_velociraptor_display_name_set() -> void:
 	_check(_load_velociraptor().display_name == "Velociraptor",
 		"display_name should be 'Velociraptor', got '%s'" % _load_velociraptor().display_name)
+
+
+## Sprint 1, Etapa 6 — regra pura, sem cena/nó nenhum: só tier 3 tem aura. Testada aqui
+## isoladamente (DinosaurDefinition.new() puro) antes/junto da conexão real em
+## PlacementController (ver dinosaur_aura_tests.gd para a parte com Dinosaur/AuraEffect de
+## verdade).
+func _test_has_aura_only_true_for_tier_3() -> void:
+	var t1 := DinosaurDefinition.new()
+	t1.tier = 1
+	_check(not t1.has_aura(), "tier 1 não deveria ter aura")
+
+	var t2 := DinosaurDefinition.new()
+	t2.tier = 2
+	_check(not t2.has_aura(), "tier 2 não deveria ter aura")
+
+	var t3 := DinosaurDefinition.new()
+	t3.tier = 3
+	_check(t3.has_aura(), "tier 3 deveria ter aura")

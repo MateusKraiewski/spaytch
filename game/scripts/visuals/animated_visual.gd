@@ -92,6 +92,40 @@ func set_base_modulate(color: Color) -> void:
 	modulate = color
 
 
+## Bug report do jogador (sobreposição visual de dinossauros vizinhos) — reduz o tamanho de
+## exibição. Atualiza `_base_scale` (não só `scale`) porque toda reação (ATTACK/HIT/DEATH/
+## spawn-pop, ver _play_reaction()/_spawn_pop_if_first()) sempre tween de volta pra `_base_scale`
+## ao final — se só `scale` fosse setado aqui, a 1ª reação depois disso desfaria a redução assim
+## que `_base_scale` capturasse `Vector2.ONE` em _ready(). Seguro chamar antes OU depois de
+## _ready() desta classe (mesmo espírito de set_sprite_frames()/set_base_modulate(), chamados por
+## Dinosaur.setup() logo após add_child() — quando o `Visual` filho, por já ter sido adicionado
+## primeiro, JÁ teve seu próprio _ready() executado nesse ponto).
+func set_display_scale(factor: float) -> void:
+	_base_scale = Vector2(factor, factor)
+	scale = _base_scale
+
+
+## Sprint 1 (integração visual) — troca o SpriteFrames do AnimatedSprite2D em runtime.
+## Dinosaur.setup() chama isto com DinosaurDefinition.sprite_frames (Etapa 2) para aplicar a arte
+## PixelLab aprovada da espécie/tier certa, sem duplicar nenhuma lógica por espécie aqui — só
+## troca o recurso, quem decide QUAL é o chamador (dado, não código).
+##
+## Usa get_node_or_null() (não o campo `_sprite` cacheado via @onready) pelo mesmo motivo já
+## documentado em DeathEffect.set_death_sprite_frames(): isto é chamado por Dinosaur.setup(),
+## que roda logo após add_child() — ANTES do `_ready()` desta própria classe, então `_sprite`
+## ainda não foi resolvido nesse momento. get_node_or_null() navega a estrutura da cena já
+## instanciada, funciona independente de `_ready()` já ter rodado. Sem efeito se não houver
+## AnimatedSprite2D (fallback procedural continua funcionando do mesmo jeito) ou se `frames` for
+## null (mantém a arte já configurada na cena — é assim que o Velociraptor procedural antigo,
+## cujo DinosaurDefinition.sprite_frames é sempre null, continua com a arte hardcoded de sempre).
+func set_sprite_frames(frames: SpriteFrames) -> void:
+	if frames == null:
+		return
+	var sprite := get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	if sprite != null:
+		sprite.sprite_frames = frames
+
+
 ## Também para a trilha de loop (IDLE/MOVE) — usado quando uma entidade
 ## precisa silenciar a animação de repouso sem tocar nenhuma reação (ex:
 ## Egg quando destruído: fica estático, cinza, sem pulso de "vivo").

@@ -25,6 +25,7 @@ func _initialize() -> void:
 	_generate_projectile()
 	_generate_impact_effect()
 	_generate_spawn_effect()
+	_generate_aura_t3()
 	print("[pixel_art_generator] done")
 	quit(0)
 
@@ -1354,4 +1355,77 @@ func _draw_spawn_dust(spread: float, rise: float, tone: Color) -> Image:
 		_fill_ellipse(img, puff_pos.x, puff_pos.y, puff_r, puff_r * 0.85, tone)
 
 	_outline(img, _SPAWN_DUST_DARK)
+	return img
+
+
+# ---------------------------------------------------------------------------
+# Aura do Velociraptor T3 (Sprint 1 — evolução visual) — arte de `AuraEffect.tscn`
+# (`scripts/visuals/aura_effect.gd`). Camada de energia SEPARADA do sprite da criatura: nunca é
+# composta/gravada em cima da arte do personagem (que, para T3, vem do PixelLab — ver
+# docs/ARCHITECTURE.md — e continua fora deste pipeline procedural), só existe como um efeito
+# próprio, instanciado atrás dela (AuraEffect.tscn usa z_index = -1). Sem contorno preto (não é
+# uma "criatura" com silhueta definida — é luz), sem `_outline()`.
+#
+# Sem sistema de tier/fusão ainda (ver docs/ROADMAP.md, Sprint 1 Parte 5, pendente) — este efeito
+# não é instanciado por nenhum gameplay hoje, existe pronto para quando essa integração acontecer.
+# ---------------------------------------------------------------------------
+
+const _AURA_SIZE := 176
+
+const _AURA_CORE := Color8(0x4D, 0xE0, 0xFF)
+const _AURA_LIGHT := Color8(0xC2, 0xF6, 0xFF)
+const _AURA_DEEP := Color8(0x1E, 0x7A, 0xC7)
+
+const _AURA_FRAME_COUNT := 4
+
+
+func _new_aura_canvas() -> Image:
+	var img := Image.create_empty(_AURA_SIZE, _AURA_SIZE, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	return img
+
+
+func _generate_aura_t3() -> void:
+	for frame in range(_AURA_FRAME_COUNT):
+		_save(_draw_aura_t3_frame(frame), "res://assets/effects/aura_t3_%d.png" % frame)
+
+
+## Arcos elétricos (2 segmentos cada, ângulo/raio variando por frame via seno/cosseno de fase) +
+## faíscas soltas (posição e quantidade mudam por frame) + brilho de fundo bem fraco com queda
+## suave (anéis concêntricos — uma elipse única de alpha fixo lia como "mancha sólida" numa
+## iteração anterior deste mesmo desenho, ver prévia aprovada). Raio máximo dos arcos/faíscas
+## mantido com folga real abaixo de `_AURA_SIZE / 2` — ver aura_t3_assets_tests.gd.
+func _draw_aura_t3_frame(frame: int) -> Image:
+	var img := _new_aura_canvas()
+	var center := Vector2(_AURA_SIZE / 2.0, _AURA_SIZE / 2.0)
+	var phase := float(frame) / float(_AURA_FRAME_COUNT) * TAU
+
+	var rings := [[62.0, 46.0, 0.03], [46.0, 32.0, 0.05], [30.0, 20.0, 0.07]]
+	for r in rings:
+		_fill_ellipse(img, center.x, center.y - 4, r[0], r[1] * 0.8,
+			Color(_AURA_CORE.r, _AURA_CORE.g, _AURA_CORE.b, r[2]))
+
+	var n_arcs := 5
+	for i in range(n_arcs):
+		var base_angle := (TAU / n_arcs) * i + phase * 0.35
+		var r0 := 58.0 + sin(phase + i) * 4.0
+		var r1 := 72.0 + cos(phase * 1.3 + i) * 5.0
+		var p0 := center + Vector2(cos(base_angle), sin(base_angle) * 0.75) * r0
+		var p_mid := center + Vector2(cos(base_angle + 0.35), sin(base_angle + 0.35) * 0.75) * r1
+		var p1 := center + Vector2(cos(base_angle + 0.7), sin(base_angle + 0.7) * 0.75) * r0
+		_fill_thick_line(img, p0, p_mid, 2.2, _AURA_DEEP)
+		_fill_thick_line(img, p_mid, p1, 2.2, _AURA_DEEP)
+		_fill_thick_line(img, p0, p_mid, 1.1, _AURA_CORE)
+		_fill_thick_line(img, p_mid, p1, 1.1, _AURA_CORE)
+		_set_px(img, int(p_mid.x), int(p_mid.y), _AURA_LIGHT)
+
+	var n_sparks := 6 + (frame % 3)
+	for i in range(n_sparks):
+		var ang := phase * 0.6 + i * 2.4
+		var dist := 50.0 + fmod(float(i) * 13.0 + frame * 9.0, 28.0)
+		var p := center + Vector2(cos(ang), sin(ang) * 0.8) * dist
+		var s := 1.0 if (i + frame) % 3 != 0 else 1.6
+		_fill_ellipse(img, p.x, p.y, s, s, _AURA_LIGHT)
+		_set_px(img, int(p.x), int(p.y - 1), _AURA_CORE)
+
 	return img

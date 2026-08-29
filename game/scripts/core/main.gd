@@ -36,6 +36,20 @@ const _WAVE_PATHS := [
 	"res://data/waves/wave_03.tres",
 ]
 
+## Sprint 1, Etapa 4 — seleção mínima entre as 3 espécies: um único botão
+## (já existente na HUD) cicla por esta lista a cada clique, em vez de criar
+## um botão por espécie ou qualquer UI de escolha nova. Mesmo padrão de
+## `_WAVE_PATHS` acima — a LISTA de quais .tres compõem a seleção fica aqui
+## (código), os VALORES de cada um continuam inteiramente em dado (.tres da
+## Etapa 2). Não usa `PlacementController.initial_definition` (que ainda
+## aponta para o Velociraptor procedural antigo, intocado) — a pré-seleção
+## automática do início agora vem do índice 0 desta lista.
+const _DINOSAUR_DEFINITION_PATHS := [
+	"res://data/dinosaurs/velociraptor_t1.tres",
+	"res://data/dinosaurs/triceratops_t1.tres",
+	"res://data/dinosaurs/trex_t1.tres",
+]
+
 enum GameState { PREPARING, WAVE_ACTIVE, WAVE_COMPLETE, GAME_OVER }
 
 @onready var _grid_manager: GridManager = $GridManager
@@ -50,8 +64,21 @@ enum GameState { PREPARING, WAVE_ACTIVE, WAVE_COMPLETE, GAME_OVER }
 @onready var _wave_manager: WaveManager = $WaveManager
 @onready var _hud: HUD = $HUD
 
+## Wave automática — intervalo entre o banner "WAVE X COMPLETE" (mesma duração, ver
+## _on_wave_completed()) e a próxima wave iniciar sozinha. Vive em Main.gd (não em WaveManager) de
+## propósito: WaveManager já documenta explicitamente que NÃO decide isto sozinho ("quem decide é
+## quem escuta wave_completed") — mudar essa fronteira exigiria justificar uma mudança de
+## arquitetura que este pedido não pede. Determinístico via `step(delta)` (mesmo padrão de
+## WaveManager._time_since_last_spawn/Dinosaur.step()) em vez de `get_tree().create_timer()` — a
+## suíte inteira testa tempo assim (chamando step() direto, sem depender de tempo real), um Timer
+## do motor quebraria essa convenção e exigiria testes com espera real.
+const _WAVE_AUTO_START_DELAY := 2.0
+
 var _state: GameState = GameState.PREPARING
 var _speed_multiplier: float = 1.0
+var _available_definitions: Array[DinosaurDefinition] = []
+var _selected_definition_index: int = 0
+var _wave_auto_start_timer: float = -1.0  ## -1 = nenhum auto-start pendente
 
 
 func _ready() -> void:
@@ -83,18 +110,24 @@ func _ready() -> void:
 
 	_placement_controller.setup(_grid_manager.grid, _enemy_spawner, _dinosaurs, _projectiles, _economy)
 	_placement_controller.placement_failed.connect(_on_placement_failed)
+	_placement_controller.dinosaur_placed.connect(_on_dinosaur_placed)
 	_placement_preview.setup(_placement_controller, _grid_manager.grid)
-	if _placement_controller.initial_definition != null:
-		_placement_controller.select_dinosaur(_placement_controller.initial_definition)
-		var definition := _placement_controller.initial_definition
-		_hud.set_dinosaur_button_label("🦖 %s (%d)" % [definition.display_name, definition.cost])
+
+	for path in _DINOSAUR_DEFINITION_PATHS:
+		_available_definitions.append(load(path) as DinosaurDefinition)
+	if not _available_definitions.is_empty():
+		var option_labels: Array[String] = []
+		for definition in _available_definitions:
+			option_labels.append("🦖 %s (%d)" % [definition.display_name, definition.cost])
+		_hud.set_dinosaur_options(option_labels)
+		_select_dinosaur_definition(0)
 
 	_hud.start_wave_pressed.connect(_on_start_wave_pressed)
 	_hud.pause_pressed.connect(_on_pause_pressed)
 	_hud.resume_pressed.connect(_on_resume_pressed)
 	_hud.menu_pressed.connect(_on_menu_pressed)
 	_hud.speed_pressed.connect(_on_speed_pressed)
-	_hud.dinosaur_button_pressed.connect(_on_dinosaur_button_pressed)
+	_hud.dinosaur_option_selected.connect(_on_dinosaur_option_selected)
 	_economy.coins_changed.connect(_on_coins_changed)
 
 	_hud.set_coins(_economy.coins)
@@ -119,7 +152,30 @@ func _on_start_wave_pressed() -> void:
 	_wave_manager.start_next_wave()
 
 
+## Único `_process` de Main — o resto do gameplay já tem seu próprio `step(delta)` chamado por
+## subsistema (WaveManager/Dinosaur/BasicEnemy/Projectile); a contagem do auto-start de wave é uma
+## decisão de FLUXO de jogo (mesma responsabilidade das transições de GameState), não pertence a
+## nenhum deles. `PROCESS_MODE_INHERIT` padrão (Main não sobrescreve) já garante que isto para
+## sozinho quando o jogo está pausado, sem nenhum código extra — mesmo comportamento de
+## WaveManager/Dinosaur durante a pausa (ver doc comment no topo do arquivo).
+func _process(delta: float) -> void:
+	step(delta)
+
+
+## Público (não `_step`) de propósito — testável chamando direto, mesma convenção de
+## WaveManager.step()/Dinosaur.step() (ver seus próprios doc comments).
+func step(delta: float) -> void:
+	if _wave_auto_start_timer < 0.0:
+		return
+	_wave_auto_start_timer -= delta
+	if _wave_auto_start_timer <= 0.0:
+		_wave_auto_start_timer = -1.0
+		if _state != GameState.GAME_OVER:
+			_wave_manager.start_next_wave()
+
+
 func _on_wave_started(wave_index: int, _wave: WaveDefinition) -> void:
+	_wave_auto_start_timer = -1.0  ## cobre tanto o início manual (botão) quanto o automático
 	_set_state(GameState.WAVE_ACTIVE)
 	_hud.show_banner("WAVE %d" % (wave_index + 1), 1.0)
 	_update_wave_hud()
@@ -130,12 +186,14 @@ func _on_wave_completed(wave_index: int, wave: WaveDefinition) -> void:
 		return
 	_set_state(GameState.WAVE_COMPLETE)
 	if _wave_manager.has_next_wave():
-		_hud.show_banner("WAVE %d COMPLETE! +%d coins" % [wave_index + 1, wave.wave_completion_reward])
+		_hud.show_banner("WAVE %d COMPLETE! +%d coins" % [wave_index + 1, wave.wave_completion_reward], _WAVE_AUTO_START_DELAY)
+		_wave_auto_start_timer = _WAVE_AUTO_START_DELAY
 	else:
 		# Última wave da campanha: feedback distinto de "acabou" em vez do
 		# banner genérico de wave-complete — sem isso o jogador só via o
 		# botão "Iniciar Onda" ficar desabilitado para sempre, sem
-		# explicação nenhuma de que tinha vencido.
+		# explicação nenhuma de que tinha vencido. Sem próxima wave, não há
+		# nada pra agendar (_wave_auto_start_timer fica em -1).
 		_hud.show_banner("🏆 VITÓRIA! Todas as ondas superadas! +%d coins" % wave.wave_completion_reward)
 	_update_wave_hud()
 
@@ -143,6 +201,19 @@ func _on_wave_completed(wave_index: int, wave: WaveDefinition) -> void:
 func _on_placement_failed(reason: String) -> void:
 	if reason == "insufficient_coins":
 		_hud.show_banner("Coins insuficientes!", 1.5)
+
+
+## Bug report do jogador — o botão continuava mostrando o nome/custo da última espécie mesmo
+## depois dela já ter sido colocada: `_place_dinosaur()` zera `selected_definition` e volta pra
+## IDLE (nada armado), mas nada avisava a HUD disso, então o texto ficava "mentindo" (mostrava uma
+## espécie que já não tinha mais nenhuma relação com o que um clique seguinte faria — em IDLE, o
+## mesmo clique vira seleção de fusão, não um novo placement). `PlacementController.dinosaur_placed`
+## já existia pronto exatamente pra este tipo de gancho (Phase 0.6, nunca conectado até agora) —
+## só reseta o texto pra um estado neutro; não rearma seleção nem muda a máquina de estados de
+## PlacementController (continua IDLE até o jogador clicar o botão de novo, comportamento da
+## Etapa 4 inalterado).
+func _on_dinosaur_placed(_dinosaur: Dinosaur, _coord: Vector2i) -> void:
+	_hud.set_dinosaur_button_label("🦖 Escolher dinossauro")
 
 
 func _on_all_eggs_destroyed() -> void:
@@ -188,16 +259,33 @@ func _unpause() -> void:
 	_hud.hide_pause_overlay()
 
 
-## Permite colocar mais de um Velociraptor por partida — sem isto, o
-## jogador só conseguiria posicionar exatamente 1 dinossauro (a pré-seleção
-## automática do início), já que PlacementController nunca voltava sozinho
-## para PLACING depois do primeiro placement. Não adiciona profundidade de
-## jogo nova, só torna utilizável a capacidade que já existia (Phase 0.4/0.5
-## permitiam isso via API; não havia jeito de acionar de novo pela UI).
-func _on_dinosaur_button_pressed() -> void:
-	if _placement_controller.state == PlacementController.State.IDLE \
-			and _placement_controller.initial_definition != null:
-		_placement_controller.select_dinosaur(_placement_controller.initial_definition)
+## Permite colocar mais de um dinossauro por partida — sem isto, o jogador só
+## conseguiria posicionar exatamente 1 (a pré-seleção automática do início),
+## já que PlacementController nunca voltava sozinho para PLACING depois do
+## primeiro placement. Não adiciona profundidade de jogo nova, só torna
+## utilizável a capacidade que já existia (Phase 0.4/0.5 permitiam isso via
+## API; não havia jeito de acionar de novo pela UI).
+##
+## Bug report do jogador — a versão anterior (Etapa 4) CICLAVA pra próxima
+## espécie a cada clique no botão único; a reclamação foi que isso "não
+## deixa escolher, só traz a próxima". Agora o botão (ver hud.gd) abre um
+## popup com as 3 espécies e este handler reage à escolha DIRETA do jogador
+## (`index` já é a posição exata em `_available_definitions`/
+## `_DINOSAUR_DEFINITION_PATHS`, sem aritmética de ciclo nenhuma).
+## `select_dinosaur()` continua seguro de chamar em qualquer estado (ver seu
+## próprio doc comment em PlacementController), então escolher de novo
+## depois de já ter colocado um funciona sem tratamento especial.
+func _on_dinosaur_option_selected(index: int) -> void:
+	if index < 0 or index >= _available_definitions.size():
+		return
+	_select_dinosaur_definition(index)
+
+
+func _select_dinosaur_definition(index: int) -> void:
+	_selected_definition_index = index
+	var definition := _available_definitions[index]
+	_placement_controller.select_dinosaur(definition)
+	_hud.set_dinosaur_button_label("🦖 %s (%d)" % [definition.display_name, definition.cost])
 
 
 func _on_speed_pressed() -> void:

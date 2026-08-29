@@ -179,9 +179,13 @@ func _test_dinosaur_button_allows_second_placement() -> void:
 	_check(placement_controller.state == PlacementController.State.IDLE,
 		"deveria voltar para IDLE após o primeiro placement")
 
-	hud.dinosaur_button_pressed.emit()
+	hud.dinosaur_button_pressed.emit()  # abre o popup de escolha (estado visual só)
+	_check(placement_controller.state == PlacementController.State.IDLE,
+		"abrir o popup sozinho não deveria rearmar nenhuma seleção ainda")
+
+	hud.dinosaur_option_selected.emit(0)  # escolhe a 1ª espécie de novo
 	_check(placement_controller.state == PlacementController.State.PLACING,
-		"o botão de dinossauro deveria permitir selecionar de novo (colocar mais de um)")
+		"escolher uma espécie no popup deveria permitir selecionar de novo (colocar mais de um)")
 
 	placement_controller.on_pointer_pressed(grid.cell_center_world(buildable[1]))
 	_check(dinosaurs.get_child_count() == 2,

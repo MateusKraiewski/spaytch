@@ -79,7 +79,7 @@ func _initialize() -> void:
 
 	_check(placement_controller.state == PlacementController.State.IDLE,
 		"deveria voltar para IDLE depois de colocar o dinossauro")
-	_check(grid.get_cell(placement_coord).occupied, "célula deveria ficar ocupada após o placement")
+	_check(grid.get_cell(placement_coord).is_occupied(), "célula deveria ficar ocupada após o placement")
 	_check(dinosaurs_container.get_child_count() == 1, "deveria existir exatamente 1 Dinosaur colocado")
 
 	if dinosaurs_container.get_child_count() == 0:

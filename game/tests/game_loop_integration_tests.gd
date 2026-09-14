@@ -33,6 +33,7 @@ func _check(condition: bool, message: String) -> void:
 func _initialize() -> void:
 	await _test_full_game_loop()
 	await _test_enemy_reaches_nest_damages_egg()
+	await _test_full_campaign_plays_through_automatically_after_first_wave()
 	await _test_dinosaur_popup_selects_species_directly()
 	await _test_hud_button_label_matches_selected_and_placed_definition()
 	await _test_player_fuses_two_dinosaurs_via_real_clicks()
@@ -158,6 +159,78 @@ func _test_enemy_reaches_nest_damages_egg() -> void:
 
 	await process_frame  # deixa o queue_free() do inimigo (chamado por EggManager) ser processado
 	_check(not is_instance_valid(enemy), "o inimigo deveria ter desaparecido (queue_free) após chegar ao ninho")
+
+	root.remove_child(main)
+	main.free()
+
+
+## Verificação de ponta a ponta pedida na auditoria de finalização (V1): a campanha inteira (3
+## waves reais do Vale dos Ovos) precisa fluir sozinha depois do primeiro "Iniciar Onda" manual —
+## wave 1 -> countdown automático -> wave 2 -> countdown -> wave 3 -> vitória — sem exigir MAIS
+## nenhum clique do jogador depois do primeiro. Cobre a interação real entre WaveManager.step()
+## (combate) e Main.step() (countdown/auto-start) ao longo de uma campanha completa, coisa que
+## nenhum teste anterior exercitava junto. 3 Velociraptor T1 (DPS + reforços) pra dar margem real
+## de sobreviver às 3 waves — o objetivo aqui é provar o FLUXO automático, não medir balance fino.
+func _test_full_campaign_plays_through_automatically_after_first_wave() -> void:
+	var main := _load_main()
+	var enemy_spawner := main.get_node("EnemySpawner") as EnemySpawner
+	var egg_manager := main.get_node("EggManager") as EggManager
+	var wave_manager := main.get_node("WaveManager") as WaveManager
+	var placement_controller := main.get_node("PlacementController") as PlacementController
+	var grid_manager := main.get_node("GridManager") as GridManager
+	var dinosaurs := main.get_node("Dinosaurs") as Node
+	var projectiles := main.get_node("Projectiles") as Node
+	var hud := main.get_node("HUD") as HUD
+	var banner := hud.get_node("Root/BannerLabel") as Label
+
+	root.add_child(main)
+	await process_frame
+
+	var grid := grid_manager.grid
+	var coord_a := Vector2i(9, 7)
+	var coord_b := _find_nearby_buildable_coord(placement_controller, coord_a)
+	placement_controller.on_pointer_pressed(grid.cell_center_world(coord_a))
+	if coord_b != Vector2i(-1, -1):
+		hud.dinosaur_option_selected.emit(0)
+		placement_controller.on_pointer_pressed(grid.cell_center_world(coord_b))
+		var coord_c := _find_nearby_buildable_coord(placement_controller, coord_b)
+		if coord_c != Vector2i(-1, -1):
+			hud.dinosaur_option_selected.emit(0)
+			placement_controller.on_pointer_pressed(grid.cell_center_world(coord_c))
+	_check(dinosaurs.get_child_count() >= 1, "deveria existir ao menos 1 Dinosaur colocado antes da campanha começar")
+
+	hud.start_wave_pressed.emit()  # único clique manual de toda a campanha
+	_check(wave_manager.is_wave_active(), "wave 1 deveria estar ativa após 'Iniciar Onda'")
+
+	var dt := 0.05
+	var iterations := 0
+	var max_iterations := 200000  # 3 waves + 2 countdowns completos cabem bem dentro disso
+	while (wave_manager.has_next_wave() or wave_manager.is_wave_active()) and not egg_manager.all_destroyed():
+		wave_manager.step(dt)
+		main.step(dt)
+		for dino in dinosaurs.get_children():
+			if dino is Dinosaur:
+				dino.step(dt)
+		for proj in projectiles.get_children():
+			if proj is Projectile:
+				proj.step(dt)
+		for enemy in enemy_spawner.get_active_enemies().duplicate():
+			enemy.step(dt)
+		iterations += 1
+		if iterations >= max_iterations:
+			break
+
+	_check(iterations < max_iterations, "campanha completa não deveria exceder o limite de segurança de iterações")
+	_check(not egg_manager.all_destroyed(), "a campanha deveria ser vencível com 3 Velociraptor T1 bem posicionados")
+	_check(wave_manager.current_wave_index == wave_manager.waves.size() - 1,
+		"a campanha deveria ter avançado sozinha até a última wave, got index %d de %d" %
+			[wave_manager.current_wave_index, wave_manager.waves.size() - 1])
+	_check(not wave_manager.is_wave_active(), "a campanha deveria terminar com nenhuma wave ativa (vitória)")
+	_check(banner.text.contains("VITÓRIA"), "banner final deveria mostrar VITÓRIA, got '%s'" % banner.text)
+
+	# Confirma que nada tenta iniciar uma 4ª wave inexistente depois da vitória.
+	main.step(30.0)
+	_check(not wave_manager.is_wave_active(), "depois da vitória, avançar o tempo não deveria iniciar nenhuma wave nova")
 
 	root.remove_child(main)
 	main.free()

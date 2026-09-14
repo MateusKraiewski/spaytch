@@ -25,7 +25,11 @@ func _initialize() -> void:
 	_build_velociraptor_t2()
 	_build_velociraptor_t3()
 	_build_triceratops_t1()
+	_build_triceratops_t2()
+	_build_triceratops_t3()
 	_build_trex_t1()
+	_build_trex_t2()
+	_build_trex_t3()
 	quit(0)
 
 
@@ -283,34 +287,47 @@ func _build_velociraptor_t3() -> void:
 ## Sprint 1). Move/Attack/Hit existem e foram aceitos "como estão" (paleta corrigida, mas ainda
 ## com 1 chifre só) — não são um erro desta etapa, é o estado aprovado.
 func _build_triceratops_t1() -> void:
+	_build_triceratops_frames("triceratops_t1", "res://data/dinosaurs/triceratops_t1_sprite_frames.tres")
+
+
+## V2 — T2/T3 de Triceratops via recolor procedural do T1 (ver tools/tier_recolor_generator.gd;
+## decisão do usuário: orçamento PixelLab quase esgotado, "tudo procedural, zero geração nova").
+## Mesma estrutura de animação do T1 (17 idle / 6 move / 7 attack / 9 hit) — o recolor herda a
+## cobertura exata do T1, não inventa frame novo nenhum, só reaproveita a função acima com outra
+## pasta de origem.
+func _build_triceratops_t2() -> void:
+	_build_triceratops_frames("triceratops_t2", "res://data/dinosaurs/triceratops_t2_sprite_frames.tres")
+
+
+func _build_triceratops_t3() -> void:
+	_build_triceratops_frames("triceratops_t3", "res://data/dinosaurs/triceratops_t3_sprite_frames.tres")
+
+
+func _build_triceratops_frames(asset_dir: StringName, output_path: String) -> void:
 	var frames := SpriteFrames.new()
 	frames.remove_animation("default")
 
 	var idle_paths: Array[String] = []
 	for i in range(17):
-		idle_paths.append("res://assets/dinosaurs/triceratops_t1/idle_%d.png" % i)
+		idle_paths.append("res://assets/dinosaurs/%s/idle_%d.png" % [asset_dir, i])
 	_add_animation(frames, "idle", idle_paths, 8.0, true)
 
-	_add_animation(frames, "move", [
-		"res://assets/dinosaurs/triceratops_t1/move_0.png",
-		"res://assets/dinosaurs/triceratops_t1/move_1.png",
-		"res://assets/dinosaurs/triceratops_t1/move_2.png",
-		"res://assets/dinosaurs/triceratops_t1/move_3.png",
-		"res://assets/dinosaurs/triceratops_t1/move_4.png",
-		"res://assets/dinosaurs/triceratops_t1/move_5.png",
-	], 8.0, true)
+	var move_paths: Array[String] = []
+	for i in range(6):
+		move_paths.append("res://assets/dinosaurs/%s/move_%d.png" % [asset_dir, i])
+	_add_animation(frames, "move", move_paths, 8.0, true)
 
 	var attack_paths: Array[String] = []
 	for i in range(7):
-		attack_paths.append("res://assets/dinosaurs/triceratops_t1/attack_%d.png" % i)
+		attack_paths.append("res://assets/dinosaurs/%s/attack_%d.png" % [asset_dir, i])
 	_add_animation(frames, "attack", attack_paths, 10.0, false)
 
 	var hit_paths: Array[String] = []
 	for i in range(9):
-		hit_paths.append("res://assets/dinosaurs/triceratops_t1/hit_%d.png" % i)
+		hit_paths.append("res://assets/dinosaurs/%s/hit_%d.png" % [asset_dir, i])
 	_add_animation(frames, "hit", hit_paths, 10.0, false)
 
-	_save(frames, "res://data/dinosaurs/triceratops_t1_sprite_frames.tres")
+	_save(frames, output_path)
 
 
 ## T-Rex T1 aprovado — só a pose base corrigida (cauda + braços vestigiais), nenhuma animação
@@ -320,6 +337,22 @@ func _build_trex_t1() -> void:
 	frames.remove_animation("default")
 	_add_animation(frames, "idle", ["res://assets/dinosaurs/trex_t1/idle_0.png"], 1.0, true)
 	_save(frames, "res://data/dinosaurs/trex_t1_sprite_frames.tres")
+
+
+## V2 — T2/T3 de T-Rex via recolor procedural do T1 (mesma decisão/ferramenta do Triceratops
+## acima). T1 só tem a pose "idle" — o recolor herda exatamente essa cobertura.
+func _build_trex_t2() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	_add_animation(frames, "idle", ["res://assets/dinosaurs/trex_t2/idle_0.png"], 1.0, true)
+	_save(frames, "res://data/dinosaurs/trex_t2_sprite_frames.tres")
+
+
+func _build_trex_t3() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	_add_animation(frames, "idle", ["res://assets/dinosaurs/trex_t3/idle_0.png"], 1.0, true)
+	_save(frames, "res://data/dinosaurs/trex_t3_sprite_frames.tres")
 
 
 func _add_animation(frames: SpriteFrames, anim_name: StringName, texture_paths: Array, fps: float, loop: bool) -> void:

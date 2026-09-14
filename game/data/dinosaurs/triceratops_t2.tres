@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="DinosaurDefinition" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/dinosaurs/dinosaur_definition.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/combat/Projectile.tscn" id="2"]
+[ext_resource type="SpriteFrames" path="res://data/dinosaurs/triceratops_t2_sprite_frames.tres" id="3"]
+[ext_resource type="Resource" path="res://data/dinosaurs/triceratops_t3.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Triceratops T2"
+range = 96.0
+attack_interval = 1.0
+damage = 26
+projectile_speed = 268.0
+projectile_scene = ExtResource("2")
+placeholder_color = Color(1, 1, 1, 1)
+cost = 56
+species_id = &"triceratops"
+tier = 2
+sprite_frames = ExtResource("3")
+evolves_to = ExtResource("4")

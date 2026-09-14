@@ -4,9 +4,9 @@ extends SceneTree
 ## placement_tests.gd — MapDefinition sintética, PlacementController real, Dinosaur real
 ## instanciado por Dinosaur.tscn).
 ##
-## Caso principal: Velociraptor, única espécie com T1/T2/T3 já disponíveis (Etapas 1-2).
-## Triceratops T1 entra só no teste de "espécies diferentes nunca fundem" — não precisa de T2/T3
-## dele existirem para isso.
+## V2: as 3 espécies (Velociraptor, Triceratops, T-Rex) têm T1/T2/T3 completos — os mesmos testes
+## de fusão são repetidos para cada uma, confirmando que Fusion/try_fuse() continuam genéricos
+## (nenhuma linha por espécie precisou ser escrita para isso funcionar).
 ##
 ## Executar com:
 ##   godot --headless --path game --script res://tests/fusion_tests.gd
@@ -28,6 +28,11 @@ func _initialize() -> void:
 
 	_test_velociraptor_t1_plus_t1_fuses_to_t2()
 	_test_velociraptor_t2_plus_t2_fuses_to_t3()
+	_test_triceratops_t1_plus_t1_fuses_to_t2()
+	_test_triceratops_t2_plus_t2_fuses_to_t3()
+	_test_trex_t1_plus_t1_fuses_to_t2()
+	_test_trex_t2_plus_t2_fuses_to_t3()
+	_test_triceratops_and_trex_do_not_fuse_across_species_at_t2()
 	_test_t3_plus_t3_is_rejected()
 	_test_different_species_is_rejected()
 	_test_different_tier_same_species_is_rejected()
@@ -184,6 +189,100 @@ func _velociraptor_t3() -> DinosaurDefinition:
 
 func _triceratops_t1() -> DinosaurDefinition:
 	return load("res://data/dinosaurs/triceratops_t1.tres") as DinosaurDefinition
+
+
+func _triceratops_t2() -> DinosaurDefinition:
+	return load("res://data/dinosaurs/triceratops_t2.tres") as DinosaurDefinition
+
+
+func _triceratops_t3() -> DinosaurDefinition:
+	return load("res://data/dinosaurs/triceratops_t3.tres") as DinosaurDefinition
+
+
+func _trex_t1() -> DinosaurDefinition:
+	return load("res://data/dinosaurs/trex_t1.tres") as DinosaurDefinition
+
+
+func _trex_t2() -> DinosaurDefinition:
+	return load("res://data/dinosaurs/trex_t2.tres") as DinosaurDefinition
+
+
+func _trex_t3() -> DinosaurDefinition:
+	return load("res://data/dinosaurs/trex_t3.tres") as DinosaurDefinition
+
+
+## V2 — Triceratops e T-Rex ganharam T2/T3 (recolor procedural, ver tools/tier_recolor_generator.gd
+## e a decisão registrada em GAME_BIBLE.md#future-ideas). Mesmos testes que já existem para
+## Velociraptor, agora cobrindo as outras 2 espécies — confirma que Fusion/try_fuse() continuam
+## 100% genéricos (nenhuma linha nova em fusion.gd foi necessária para isto funcionar).
+func _test_triceratops_t1_plus_t1_fuses_to_t2() -> void:
+	var grid := _make_two_cell_grid()
+	var controller := _controller_for_fusion(grid)
+	_place(controller, grid, _triceratops_t1(), _COORD_A)
+	_place(controller, grid, _triceratops_t1(), _COORD_B)
+
+	var result := controller.try_fuse(_COORD_A, _COORD_B)
+
+	_check(result != null, "Triceratops T1 + T1 deveria fundir")
+	if result != null:
+		_check(result.definition.species_id == &"triceratops", "resultado deveria manter species_id 'triceratops'")
+		_check(result.definition.tier == 2, "resultado deveria ser tier 2")
+
+
+func _test_triceratops_t2_plus_t2_fuses_to_t3() -> void:
+	var grid := _make_two_cell_grid()
+	var controller := _controller_for_fusion(grid)
+	_place(controller, grid, _triceratops_t2(), _COORD_A)
+	_place(controller, grid, _triceratops_t2(), _COORD_B)
+
+	var result := controller.try_fuse(_COORD_A, _COORD_B)
+
+	_check(result != null, "Triceratops T2 + T2 deveria fundir")
+	if result != null:
+		_check(result.definition.tier == 3, "resultado deveria ser tier 3")
+		_check(result.definition.has_aura(), "Triceratops T3 deveria ter aura")
+
+
+func _test_trex_t1_plus_t1_fuses_to_t2() -> void:
+	var grid := _make_two_cell_grid()
+	var controller := _controller_for_fusion(grid)
+	_place(controller, grid, _trex_t1(), _COORD_A)
+	_place(controller, grid, _trex_t1(), _COORD_B)
+
+	var result := controller.try_fuse(_COORD_A, _COORD_B)
+
+	_check(result != null, "T-Rex T1 + T1 deveria fundir")
+	if result != null:
+		_check(result.definition.species_id == &"trex", "resultado deveria manter species_id 'trex'")
+		_check(result.definition.tier == 2, "resultado deveria ser tier 2")
+
+
+func _test_trex_t2_plus_t2_fuses_to_t3() -> void:
+	var grid := _make_two_cell_grid()
+	var controller := _controller_for_fusion(grid)
+	_place(controller, grid, _trex_t2(), _COORD_A)
+	_place(controller, grid, _trex_t2(), _COORD_B)
+
+	var result := controller.try_fuse(_COORD_A, _COORD_B)
+
+	_check(result != null, "T-Rex T2 + T2 deveria fundir")
+	if result != null:
+		_check(result.definition.tier == 3, "resultado deveria ser tier 3")
+		_check(result.definition.has_aura(), "T-Rex T3 deveria ter aura")
+
+
+## Confirma que espécies diferentes de tier alto continuam bloqueadas pela mesma regra de sempre
+## (Fusion.can_fuse() já testa isso para T1 — aqui é só a confirmação de que nada mudou pras
+## definições novas especificamente).
+func _test_triceratops_and_trex_do_not_fuse_across_species_at_t2() -> void:
+	var grid := _make_two_cell_grid()
+	var controller := _controller_for_fusion(grid)
+	_place(controller, grid, _triceratops_t2(), _COORD_A)
+	_place(controller, grid, _trex_t2(), _COORD_B)
+
+	var result := controller.try_fuse(_COORD_A, _COORD_B)
+
+	_check(result == null, "Triceratops T2 + T-Rex T2 nunca deveria fundir (espécies diferentes)")
 
 
 func _test_velociraptor_t1_plus_t1_fuses_to_t2() -> void:

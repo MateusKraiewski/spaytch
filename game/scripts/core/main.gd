@@ -64,21 +64,39 @@ enum GameState { PREPARING, WAVE_ACTIVE, WAVE_COMPLETE, GAME_OVER }
 @onready var _wave_manager: WaveManager = $WaveManager
 @onready var _hud: HUD = $HUD
 
-## Wave automática — intervalo entre o banner "WAVE X COMPLETE" (mesma duração, ver
-## _on_wave_completed()) e a próxima wave iniciar sozinha. Vive em Main.gd (não em WaveManager) de
-## propósito: WaveManager já documenta explicitamente que NÃO decide isto sozinho ("quem decide é
-## quem escuta wave_completed") — mudar essa fronteira exigiria justificar uma mudança de
-## arquitetura que este pedido não pede. Determinístico via `step(delta)` (mesmo padrão de
-## WaveManager._time_since_last_spawn/Dinosaur.step()) em vez de `get_tree().create_timer()` — a
-## suíte inteira testa tempo assim (chamando step() direto, sem depender de tempo real), um Timer
-## do motor quebraria essa convenção e exigiria testes com espera real.
-const _WAVE_AUTO_START_DELAY := 2.0
+## Wave automática — intervalo entre o banner "WAVE X COMPLETE" e a próxima wave iniciar sozinha.
+## Vive em Main.gd (não em WaveManager) de propósito: WaveManager já documenta explicitamente que
+## NÃO decide isto sozinho ("quem decide é quem escuta wave_completed") — mudar essa fronteira
+## exigiria justificar uma mudança de arquitetura que este pedido não pede. Determinístico via
+## `step(delta)` (mesmo padrão de WaveManager._time_since_last_spawn/Dinosaur.step()) em vez de
+## `get_tree().create_timer()` — a suíte inteira testa tempo assim (chamando step() direto, sem
+## depender de tempo real), um Timer do motor quebraria essa convenção e exigiria testes com
+## espera real.
+const _WAVE_COMPLETE_BANNER_DURATION := 2.0
+
+## Countdown "3, 2, 1, GO!" antes de cada wave (exceto a primeira, que começa por ação direta do
+## jogador) — cada item é [texto, duração em segundos], consumido em ordem por step() depois do
+## banner "WAVE X COMPLETE" já ter ficado visível por _WAVE_COMPLETE_BANNER_DURATION. Mesmo Label
+## de sempre (`HUD.show_banner`), sem elemento de UI novo — só mais uma sequência de textos.
+const _WAVE_COUNTDOWN_STEPS: Array = [
+	["3", 1.0],
+	["2", 1.0],
+	["1", 1.0],
+	["GO!", 0.6],
+]
 
 var _state: GameState = GameState.PREPARING
 var _speed_multiplier: float = 1.0
 var _available_definitions: Array[DinosaurDefinition] = []
 var _selected_definition_index: int = 0
-var _wave_auto_start_timer: float = -1.0  ## -1 = nenhum auto-start pendente
+
+## Fila de passos do countdown ainda não exibidos (ver _WAVE_COUNTDOWN_STEPS) — vazia quando não
+## há countdown em andamento. `_wave_intermission_timer < 0.0` é o sentinel de "nada pendente"
+## (mesmo espírito de `PlacementController.fusion_pending_coord = Vector2i(-1,-1)`); o 1º valor
+## setado em _on_wave_completed() é o tempo restante do banner "COMPLETE" (fila ainda intacta,
+## step() só começa a consumi-la quando esse tempo zerar).
+var _wave_intermission_queue: Array = []
+var _wave_intermission_timer: float = -1.0
 
 
 func _ready() -> void:
@@ -153,29 +171,40 @@ func _on_start_wave_pressed() -> void:
 
 
 ## Único `_process` de Main — o resto do gameplay já tem seu próprio `step(delta)` chamado por
-## subsistema (WaveManager/Dinosaur/BasicEnemy/Projectile); a contagem do auto-start de wave é uma
-## decisão de FLUXO de jogo (mesma responsabilidade das transições de GameState), não pertence a
-## nenhum deles. `PROCESS_MODE_INHERIT` padrão (Main não sobrescreve) já garante que isto para
-## sozinho quando o jogo está pausado, sem nenhum código extra — mesmo comportamento de
+## subsistema (WaveManager/Dinosaur/BasicEnemy/Projectile); a contagem do intervalo/countdown entre
+## waves é uma decisão de FLUXO de jogo (mesma responsabilidade das transições de GameState), não
+## pertence a nenhum deles. `PROCESS_MODE_INHERIT` padrão (Main não sobrescreve) já garante que
+## isto para sozinho quando o jogo está pausado, sem nenhum código extra — mesmo comportamento de
 ## WaveManager/Dinosaur durante a pausa (ver doc comment no topo do arquivo).
 func _process(delta: float) -> void:
 	step(delta)
 
 
 ## Público (não `_step`) de propósito — testável chamando direto, mesma convenção de
-## WaveManager.step()/Dinosaur.step() (ver seus próprios doc comments).
+## WaveManager.step()/Dinosaur.step() (ver seus próprios doc comments). Consome
+## `_wave_intermission_timer`/`_wave_intermission_queue`: enquanto o timer não chega a zero, só
+## decrementa; ao chegar a zero, mostra o PRÓXIMO texto da fila (e rearma o timer com a duração
+## dele) ou, se a fila já estiver vazia, inicia a próxima wave de verdade.
 func step(delta: float) -> void:
-	if _wave_auto_start_timer < 0.0:
+	if _wave_intermission_timer < 0.0:
 		return
-	_wave_auto_start_timer -= delta
-	if _wave_auto_start_timer <= 0.0:
-		_wave_auto_start_timer = -1.0
-		if _state != GameState.GAME_OVER:
-			_wave_manager.start_next_wave()
+	_wave_intermission_timer -= delta
+	if _wave_intermission_timer > 0.0:
+		return
+	if not _wave_intermission_queue.is_empty():
+		var countdown_step: Array = _wave_intermission_queue.pop_front()
+		_hud.show_banner(countdown_step[0], 0.0)
+		_wave_intermission_timer = countdown_step[1]
+		return
+	_wave_intermission_timer = -1.0
+	if _state != GameState.GAME_OVER:
+		_wave_manager.start_next_wave()
 
 
 func _on_wave_started(wave_index: int, _wave: WaveDefinition) -> void:
-	_wave_auto_start_timer = -1.0  ## cobre tanto o início manual (botão) quanto o automático
+	## Cobre tanto o início manual (botão, pula o resto do countdown) quanto o automático.
+	_wave_intermission_timer = -1.0
+	_wave_intermission_queue.clear()
 	_set_state(GameState.WAVE_ACTIVE)
 	_hud.show_banner("WAVE %d" % (wave_index + 1), 1.0)
 	_update_wave_hud()
@@ -186,14 +215,19 @@ func _on_wave_completed(wave_index: int, wave: WaveDefinition) -> void:
 		return
 	_set_state(GameState.WAVE_COMPLETE)
 	if _wave_manager.has_next_wave():
-		_hud.show_banner("WAVE %d COMPLETE! +%d coins" % [wave_index + 1, wave.wave_completion_reward], _WAVE_AUTO_START_DELAY)
-		_wave_auto_start_timer = _WAVE_AUTO_START_DELAY
+		# Sem auto-hide próprio (`show_banner(..., 0.0)`): quem substitui este texto é sempre o
+		# próximo passo do countdown (ou "WAVE X" ao iniciar de verdade) — um 2º timer de auto-hide
+		# correria em paralelo por tempo real (get_tree().create_timer(), não pausável do mesmo
+		# jeito que este step()), podendo dessincronizar sob pausa.
+		_hud.show_banner("WAVE %d COMPLETE! +%d coins" % [wave_index + 1, wave.wave_completion_reward], 0.0)
+		_wave_intermission_queue = _WAVE_COUNTDOWN_STEPS.duplicate(true)
+		_wave_intermission_timer = _WAVE_COMPLETE_BANNER_DURATION
 	else:
 		# Última wave da campanha: feedback distinto de "acabou" em vez do
 		# banner genérico de wave-complete — sem isso o jogador só via o
 		# botão "Iniciar Onda" ficar desabilitado para sempre, sem
 		# explicação nenhuma de que tinha vencido. Sem próxima wave, não há
-		# nada pra agendar (_wave_auto_start_timer fica em -1).
+		# nada pra agendar (_wave_intermission_timer/_queue ficam vazios).
 		_hud.show_banner("🏆 VITÓRIA! Todas as ondas superadas! +%d coins" % wave.wave_completion_reward)
 	_update_wave_hud()
 

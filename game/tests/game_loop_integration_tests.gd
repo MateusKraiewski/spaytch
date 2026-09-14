@@ -416,9 +416,19 @@ func _find_nearby_buildable_coord(placement_controller: PlacementController, nea
 ## direto (mesma convenção determinística do resto da suíte, ver doc comment no topo do arquivo)
 ## em vez de esperar tempo real — `get_tree().create_timer()` não seria testável assim, por isso
 ## a implementação usa um acumulador de delta próprio (ver Main.step()).
+## Wave automática com countdown "3, 2, 1, GO!" (pedido explícito da missão de finalização V1) —
+## depois de uma wave completar (havendo próxima), o banner mostra "WAVE X COMPLETE" por
+## Main._WAVE_COMPLETE_BANNER_DURATION, depois cada passo de Main._WAVE_COUNTDOWN_STEPS em
+## sequência, e só então a próxima wave inicia sozinha — sem exigir o botão "Iniciar Onda". Os
+## valores de tempo aqui precisam bater com as constantes de Main.gd (não referenciáveis direto —
+## Main.gd não tem `class_name`). Avança o tempo via `main.step(delta)` direto (mesma convenção
+## determinística do resto da suíte, ver doc comment no topo do arquivo) em vez de esperar tempo
+## real — `get_tree().create_timer()` não seria testável assim.
 func _test_wave_auto_starts_after_completion_interval() -> void:
 	var main := _load_main()
 	var wave_manager := main.get_node("WaveManager") as WaveManager
+	var hud := main.get_node("HUD") as HUD
+	var banner := hud.get_node("Root/BannerLabel") as Label
 
 	root.add_child(main)
 	await process_frame
@@ -427,13 +437,31 @@ func _test_wave_auto_starts_after_completion_interval() -> void:
 	wave_manager.wave_completed.emit(0, wave_manager.waves[0])
 	_check(not wave_manager.is_wave_active(),
 		"sanity: a próxima wave não deveria iniciar no instante exato do wave_completed, antes do intervalo")
+	_check(banner.text.contains("COMPLETE"),
+		"banner deveria mostrar 'WAVE 1 COMPLETE' assim que a wave termina, got '%s'" % banner.text)
 
 	main.step(1.99)
-	_check(not wave_manager.is_wave_active(), "a próxima wave não deveria iniciar ANTES do intervalo completar")
+	_check(not wave_manager.is_wave_active(), "a próxima wave não deveria iniciar antes do banner COMPLETE terminar")
+	_check(banner.text.contains("COMPLETE"), "banner ainda deveria mostrar COMPLETE pouco antes do countdown começar")
 
-	main.step(0.02)
+	main.step(0.02)  # cruza os 2.0s do banner COMPLETE -> 1º passo do countdown
+	_check(banner.text == "3", "countdown deveria mostrar '3' assim que o banner COMPLETE terminar, got '%s'" % banner.text)
+	_check(not wave_manager.is_wave_active(), "a wave não deveria iniciar durante o '3'")
+
+	main.step(1.0)  # "3" -> "2"
+	_check(banner.text == "2", "countdown deveria avançar para '2', got '%s'" % banner.text)
+
+	main.step(1.0)  # "2" -> "1"
+	_check(banner.text == "1", "countdown deveria avançar para '1', got '%s'" % banner.text)
+
+	main.step(1.0)  # "1" -> "GO!"
+	_check(banner.text == "GO!", "countdown deveria avançar para 'GO!', got '%s'" % banner.text)
+	_check(not wave_manager.is_wave_active(), "a wave ainda não deveria ter iniciado durante o 'GO!'")
+
+	main.step(0.61)  # "GO!" termina -> wave 2 inicia de verdade
 	_check(wave_manager.is_wave_active() and wave_manager.current_wave_index == 1,
-		"a próxima wave deveria iniciar sozinha assim que o intervalo completar")
+		"a próxima wave deveria iniciar sozinha assim que o countdown terminar")
+	_check(banner.text == "WAVE 2", "banner deveria trocar para 'WAVE 2' ao iniciar de verdade, got '%s'" % banner.text)
 
 	root.remove_child(main)
 	main.free()

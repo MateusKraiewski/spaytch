@@ -139,7 +139,7 @@ func _test_enemy_reaches_nest_damages_egg() -> void:
 	# Nenhum dinossauro é colocado neste cenário — o inimigo percorre o
 	# caminho inteiro sem oposição.
 	hud.start_wave_pressed.emit()
-	wave_manager.step(wave_manager.waves[0].spawn_interval)  # dispara o primeiro spawn da wave
+	wave_manager.step(wave_manager.waves[0].get_groups()[0].spawn_interval)  # dispara o primeiro spawn da wave
 
 	_check(enemy_spawner.get_active_enemies().size() >= 1, "deveria existir ao menos 1 inimigo spawnado")
 	var enemy: BasicEnemy = enemy_spawner.get_active_enemies()[0]

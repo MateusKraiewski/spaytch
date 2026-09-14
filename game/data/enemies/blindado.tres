@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemyDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Blindado"
+speed = 45.0
+max_hp = 30
+egg_damage = 12
+reward_per_kill = 10
+armor = 5
+placeholder_color = Color(1, 1, 1, 1)

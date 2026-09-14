@@ -11,7 +11,14 @@ extends Node
 ## Não permite iniciar duas waves simultaneamente (state machine mínima:
 ## IDLE / SPAWNING / WAITING_FOR_CLEAR). Não inicia a próxima wave
 ## automaticamente — quem decide isso é quem escuta `wave_completed`
-## (Main.gd, via botão da HUD).
+## (Main.gd, via botão da HUD/countdown automático — ver main.gd).
+##
+## V2 — `WaveDefinition.groups` (Array[WaveEnemyGroup]) substitui o antigo `enemy_count`/
+## `spawn_interval` flat: SPAWNING agora percorre os grupos em ordem (`_current_group_index`/
+## `_spawned_in_group`), só avançando pro próximo grupo quando o atual termina de spawnar, e só
+## indo para WAITING_FOR_CLEAR quando o ÚLTIMO grupo terminar. WaveManager continua sem saber
+## nada sobre QUAL tipo de inimigo está spawnando — só repassa `group.enemy_definition` pronto
+## pra EnemySpawner.spawn_enemy(), a mesma relação de sempre com WaveDefinition.
 ##
 ## `extends Node`: sem identidade espacial própria, mesmo raciocínio de
 ## EnemySpawner/PlacementController/Economy.
@@ -34,7 +41,8 @@ var _enemy_spawner: EnemySpawner
 var _economy: Economy
 var _locked: bool = false  ## true após game over — impede spawn/wave novos
 var _time_since_last_spawn: float = 0.0
-var _spawned_count: int = 0
+var _current_group_index: int = 0  ## índice do grupo (WaveEnemyGroup) sendo spawnado agora
+var _spawned_in_group: int = 0  ## quantos já foram spawnados do grupo atual
 
 
 func setup(enemy_spawner: EnemySpawner, economy: Economy) -> void:
@@ -63,7 +71,10 @@ func start_next_wave() -> void:
 	current_wave_index += 1
 	state = State.SPAWNING
 	_time_since_last_spawn = 0.0
-	_spawned_count = 0
+	_current_group_index = 0
+	_spawned_in_group = 0
+	if _current_wave().get_groups().is_empty():
+		state = State.WAITING_FOR_CLEAR  # wave sem grupo nenhum (dado degenerado) — nada a spawnar
 	wave_started.emit(current_wave_index, _current_wave())
 
 
@@ -76,15 +87,20 @@ func step(delta: float) -> void:
 		return
 
 	var wave := _current_wave()
+	var groups := wave.get_groups()
 
 	if state == State.SPAWNING:
 		_time_since_last_spawn += delta
-		if _time_since_last_spawn >= wave.spawn_interval:
+		var group := groups[_current_group_index]
+		if _time_since_last_spawn >= group.spawn_interval:
 			_time_since_last_spawn = 0.0
-			_enemy_spawner.spawn_enemy(wave.speed_override, wave.hp_override)
-			_spawned_count += 1
-			if _spawned_count >= wave.enemy_count:
-				state = State.WAITING_FOR_CLEAR
+			_enemy_spawner.spawn_enemy(group.enemy_definition)
+			_spawned_in_group += 1
+			if _spawned_in_group >= group.count:
+				_current_group_index += 1
+				_spawned_in_group = 0
+				if _current_group_index >= groups.size():
+					state = State.WAITING_FOR_CLEAR
 
 	# Sem "elif": uma wave de 1 inimigo pode legitimamente já estar pronta
 	# para completar no mesmo step() em que WAITING_FOR_CLEAR acabou de ser
@@ -107,7 +123,7 @@ func _current_wave() -> WaveDefinition:
 	return waves[current_wave_index]
 
 
-func _on_enemy_died(_enemy: BasicEnemy) -> void:
-	if _economy == null or current_wave_index < 0 or current_wave_index >= waves.size():
+func _on_enemy_died(enemy: BasicEnemy) -> void:
+	if _economy == null or enemy.definition == null:
 		return
-	_economy.add(_current_wave().reward_per_kill)
+	_economy.add(enemy.definition.reward_per_kill)

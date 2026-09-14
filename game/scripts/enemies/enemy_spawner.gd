@@ -7,10 +7,10 @@ extends Node
 ## (mesmo raciocínio de InputManager) — quem tem posição é o BasicEnemy
 ## spawnado, não o spawner.
 ##
-## Spawn parametrizado por chamador (Phase 0.5: WaveManager chama
-## spawn_enemy() repetidamente, um por vez, com overrides opcionais de
-## speed/hp vindos de um WaveDefinition) — EnemySpawner continua sem saber
-## nada sobre waves, só cria UM inimigo por chamada com os parâmetros dados.
+## Spawn parametrizado por chamador (Phase 0.5: WaveManager chama spawn_enemy() repetidamente, um
+## por vez; V2: cada chamada recebe um EnemyDefinition inteiro vindo do WaveEnemyGroup atual) —
+## EnemySpawner continua sem saber nada sobre waves/grupos, só cria UM inimigo por chamada com o
+## dado já resolvido.
 ##
 ## Recebe Grid (para conversão célula→mundo via Grid.cell_center_world —
 ## conversão centralizada, não duplicada aqui) e MapPath (sequência já
@@ -49,24 +49,22 @@ func setup(grid: Grid, map_path: MapPath) -> void:
 	_map_path = map_path
 
 
-## `speed_override`/`hp_override` <= 0 significam "usar o default do
-## BasicEnemy.tscn" — permitem a um WaveDefinition ajustar dificuldade sem
-## EnemySpawner precisar conhecer WaveDefinition/WaveManager.
-func spawn_enemy(speed_override: float = -1.0, hp_override: int = -1) -> BasicEnemy:
+## `definition == null` significa "usar o default do BasicEnemy.tscn" (comportamento de sempre,
+## também usado por testes que chamam spawn_enemy() direto sem uma wave por trás) — V2: antes
+## disto eram `speed_override`/`hp_override` numéricos vindos de WaveDefinition; agora é um
+## `EnemyDefinition` inteiro (vindo de WaveEnemyGroup, via WaveManager), o mesmo padrão já usado
+## por PlacementController/DinosaurDefinition. EnemySpawner continua sem saber nada sobre
+## waves/grupos — só recebe o dado já resolvido e repassa pra BasicEnemy.initialize().
+func spawn_enemy(definition: EnemyDefinition = null) -> BasicEnemy:
 	assert(_grid != null and _map_path != null, "EnemySpawner.setup() must be called before spawn_enemy().")
 	assert(enemy_scene != null, "EnemySpawner.enemy_scene is not assigned.")
 
 	var enemy := enemy_scene.instantiate() as BasicEnemy
-	if speed_override > 0.0:
-		enemy.speed = speed_override
-	if hp_override > 0:
-		enemy.max_hp = hp_override
-
 	add_child(enemy)
 	enemy.reached_nest.connect(_on_enemy_reached_nest)
 	enemy.died.connect(_on_enemy_died)
 	enemy.tree_exited.connect(_on_enemy_tree_exited.bind(enemy))
-	enemy.initialize(_world_waypoints())
+	enemy.initialize(_world_waypoints(), definition)
 
 	# Checkpoint E — feedback visual de que algo acabou de nascer no SPAWN (antes disso, o inimigo
 	# só "aparecia" sem nenhum reconhecimento visual, diferente de impacto/morte/chegada ao ninho,

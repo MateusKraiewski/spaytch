@@ -32,9 +32,14 @@ signal reached_nest(enemy: BasicEnemy)
 signal died(enemy: BasicEnemy)
 signal damaged(enemy: BasicEnemy, amount: int)  ## Phase 0.5 — gancho para feedback visual (flash etc.)
 
-@export var speed: float = 60.0  ## px/s — TBD/placeholder balance
-@export var max_hp: int = 20  ## TBD/placeholder balance
-@export var egg_damage: int = 10  ## dano causado a um ovo ao alcançar o ninho — TBD/placeholder balance
+## V2 — qual EnemyDefinition originou este inimigo (null = spawnado sem um, ver initialize()) —
+## mesmo espírito de Dinosaur.definition: consultado por quem precisa saber O TIPO (hoje só
+## WaveManager, pra recompensa por kill; ver _on_enemy_died()).
+@export var definition: EnemyDefinition
+
+@export var speed: float = 60.0  ## px/s — TBD/placeholder balance; sobrescrito por definition.speed se houver
+@export var max_hp: int = 20  ## TBD/placeholder balance; sobrescrito por definition.max_hp se houver
+@export var egg_damage: int = 10  ## dano ao ninho; sobrescrito por definition.egg_damage se houver
 
 const _ARRIVAL_EPSILON := 0.01
 const _MAX_ITERATIONS_PER_STEP := 64  ## rede de segurança contra dados degenerados (não deveria disparar em uso normal)
@@ -60,8 +65,18 @@ var _distance_traveled: float = 0.0
 ## initialize() já é o ponto de entrada estabelecido de "preparar este
 ## inimigo para uma corrida", também é o lugar certo (e já testado) para
 ## isso, e funciona igual nos dois contextos.
-func initialize(waypoints: Array[Vector2]) -> void:
+## `p_definition` opcional (V2) — quando fornecido, sobrescreve speed/max_hp/egg_damage a partir
+## dele ANTES de aplicar o resto do reset (mesma ordem de Dinosaur.setup() lendo
+## DinosaurDefinition). `null` preserva o comportamento de sempre (Sprint 0-1): quem chama
+## initialize() sem definition continua controlando speed/max_hp/egg_damage diretamente via
+## @export, como todo teste existente já faz.
+func initialize(waypoints: Array[Vector2], p_definition: EnemyDefinition = null) -> void:
 	assert(waypoints.size() >= 2, "BasicEnemy requires at least 2 waypoints (start and end).")
+	definition = p_definition
+	if definition != null:
+		speed = definition.speed
+		max_hp = definition.max_hp
+		egg_damage = definition.egg_damage
 	_waypoints = waypoints
 	_current_index = 0
 	_finished = false
@@ -70,6 +85,11 @@ func initialize(waypoints: Array[Vector2]) -> void:
 	hp = max_hp
 	position = _waypoints[0]
 	if _visual != null:
+		# Mesmo contrato de Dinosaur.setup(): sprite_frames nulo (todo o roster V2 atual, ainda sem
+		# arte própria por tipo) não troca nada — a cena mantém a arte procedural já hardcoded.
+		if definition != null and definition.sprite_frames != null:
+			_visual.set_sprite_frames(definition.sprite_frames)
+			_visual.set_base_modulate(definition.placeholder_color)
 		_visual.play_state(AnimatedVisual.State.MOVE)
 
 
@@ -105,15 +125,23 @@ func get_distance_traveled() -> float:
 ## nada sobre movimento/waypoints. Sem efeito se o inimigo já está morto ou
 ## já chegou ao ninho (evita, por exemplo, dois projéteis no mesmo frame
 ## matarem o mesmo inimigo duas vezes e dispararem `died` duas vezes).
+## V2 — `definition.armor` (0 se não houver definition) reduz o dano ANTES de aplicar, mas nunca
+## deixa passar menos que 1 — um "Blindado" fica ineficiente contra ataques fracos, não invencível
+## contra qualquer atacante (evitaria uma composição de dinossauros ficar matematicamente
+## impossível). `damaged`/DamageNumber mostram o dano EFETIVO (pós-armor), não o bruto — é o que
+## realmente aconteceu ao hp, e é o número que o jogador precisa ver pra entender que a armadura
+## está funcionando.
 func take_damage(amount: int) -> void:
 	if not is_active():
 		return
-	hp -= amount
-	damaged.emit(self, amount)
+	var armor := definition.armor if definition != null else 0
+	var effective_amount := maxi(amount - armor, 1)
+	hp -= effective_amount
+	damaged.emit(self, effective_amount)
 	if _visual != null:
 		_visual.play_state(AnimatedVisual.State.HIT)
 	if is_inside_tree():
-		_spawn_damage_number(amount)
+		_spawn_damage_number(effective_amount)
 	if hp <= 0:
 		_die()
 

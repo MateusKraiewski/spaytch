@@ -4,9 +4,7 @@
 
 [resource]
 script = ExtResource("1")
-enemy_count = 10
-spawn_interval = 0.8
-reward_per_kill = 7
-wave_completion_reward = 30
-speed_override = -1.0
-hp_override = 25
+group_enemy_paths = Array[String](["res://data/enemies/tanque.tres", "res://data/enemies/enxame.tres", "res://data/enemies/blindado.tres"])
+group_counts = Array[int]([2, 6, 2])
+group_spawn_intervals = Array[float]([1.5, 0.4, 1.2])
+wave_completion_reward = 45

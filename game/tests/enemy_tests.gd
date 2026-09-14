@@ -50,6 +50,12 @@ func _initialize() -> void:
 	_test_distance_traveled_accumulates()
 	_test_distance_traveled_stops_after_finish()
 
+	_test_initialize_with_definition_applies_stats()
+	_test_initialize_without_definition_keeps_manual_stats()
+	_test_armor_reduces_damage()
+	_test_armor_never_reduces_damage_below_one()
+	_test_damaged_signal_reports_effective_post_armor_amount()
+
 	if _failures == 0:
 		print("[enemy_tests] ALL TESTS PASSED")
 	else:
@@ -200,6 +206,73 @@ func _test_no_movement_after_death() -> void:
 	var position_after_death := enemy.position
 	enemy.step(1.0)
 	_check(enemy.position == position_after_death, "dead enemy should not move")
+
+
+# ---- V2 — EnemyDefinition (roster data-driven) ----
+
+func _make_definition(speed: float = 90.0, max_hp: int = 15, egg_damage: int = 7, armor: int = 0) -> EnemyDefinition:
+	var definition := EnemyDefinition.new()
+	definition.speed = speed
+	definition.max_hp = max_hp
+	definition.egg_damage = egg_damage
+	definition.armor = armor
+	return definition
+
+
+func _test_initialize_with_definition_applies_stats() -> void:
+	var enemy := BasicEnemy.new()
+	enemy.speed = 999.0  # valores que initialize() com definition deveria SOBRESCREVER
+	enemy.max_hp = 999
+	enemy.egg_damage = 999
+	var definition := _make_definition(90.0, 15, 7)
+	enemy.initialize([Vector2(0, 0), Vector2(100, 0)], definition)
+	_check(enemy.speed == 90.0, "speed deveria vir do EnemyDefinition, got %f" % enemy.speed)
+	_check(enemy.max_hp == 15, "max_hp deveria vir do EnemyDefinition, got %d" % enemy.max_hp)
+	_check(enemy.hp == 15, "hp deveria ser inicializado com o max_hp do EnemyDefinition, got %d" % enemy.hp)
+	_check(enemy.egg_damage == 7, "egg_damage deveria vir do EnemyDefinition, got %d" % enemy.egg_damage)
+	_check(enemy.definition == definition, "enemy.definition deveria ser exatamente o objeto passado")
+	enemy.free()
+
+
+## Sem definition (todo o roster Phase 0.3-0.6, e qualquer teste que não passe uma) continua
+## controlando speed/max_hp/egg_damage diretamente via @export, exatamente como sempre — initialize()
+## opcional não pode quebrar esse caminho antigo.
+func _test_initialize_without_definition_keeps_manual_stats() -> void:
+	var enemy := _make_enemy([Vector2(0, 0), Vector2(100, 0)], 42.0, 33)
+	_check(enemy.speed == 42.0, "sem definition, speed deveria continuar o valor setado manualmente")
+	_check(enemy.max_hp == 33, "sem definition, max_hp deveria continuar o valor setado manualmente")
+	_check(enemy.definition == null, "sem definition, enemy.definition deveria continuar null")
+	enemy.free()
+
+
+## "Blindado" — a única mecânica nova do roster V2: armor reduz cada hit, forçando dano por hit
+## mais alto em vez de spam de ataques fracos.
+func _test_armor_reduces_damage() -> void:
+	var enemy := BasicEnemy.new()
+	enemy.initialize([Vector2(0, 0), Vector2(100, 0)], _make_definition(60.0, 30, 10, 5))
+	enemy.take_damage(8)  # 8 - 5 armor = 3 efetivo
+	_check(enemy.hp == 27, "armor deveria reduzir o dano em 5 (30 - 3 = 27), got %d" % enemy.hp)
+	enemy.free()
+
+
+## Mesmo um atacante muito mais fraco que a armadura sempre causa PELO MENOS 1 de dano —
+## armadura reduz, nunca torna o inimigo matematicamente invencível.
+func _test_armor_never_reduces_damage_below_one() -> void:
+	var enemy := BasicEnemy.new()
+	enemy.initialize([Vector2(0, 0), Vector2(100, 0)], _make_definition(60.0, 30, 10, 999))
+	enemy.take_damage(1)
+	_check(enemy.hp == 29, "mesmo com armor absurdamente alto, pelo menos 1 de dano deveria passar, got hp=%d" % enemy.hp)
+	enemy.free()
+
+
+func _test_damaged_signal_reports_effective_post_armor_amount() -> void:
+	var enemy := BasicEnemy.new()
+	enemy.initialize([Vector2(0, 0), Vector2(100, 0)], _make_definition(60.0, 30, 10, 5))
+	var reported := [-1]
+	enemy.damaged.connect(func(_e: BasicEnemy, amount: int) -> void: reported[0] = amount)
+	enemy.take_damage(8)
+	_check(reported[0] == 3, "sinal damaged deveria reportar o dano EFETIVO pós-armor (8-5=3), got %d" % reported[0])
+	enemy.free()
 
 
 func _test_is_active_true_when_alive() -> void:

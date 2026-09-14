@@ -26,6 +26,8 @@ func _initialize() -> void:
 	_test_kill_grants_reward()
 	_test_lock_prevents_new_waves_and_spawning()
 	_test_has_next_wave()
+	_test_wave_with_multiple_groups_spawns_second_group_only_after_first_finishes()
+	_test_reward_per_kill_comes_from_each_enemys_own_definition()
 
 	for obj in _to_free:
 		if is_instance_valid(obj):
@@ -72,11 +74,16 @@ func _make_economy(starting: int = 0) -> Economy:
 	return _track(economy) as Economy
 
 
+## V2 — WaveDefinition agora é baseada em grupos (ver wave_definition.gd/wave_enemy_group.gd);
+## este helper continua com a MESMA assinatura de sempre (wave_tests.gd testa o FLUXO de
+## spawn/reward/conclusão do WaveManager, não a variedade de tipos — isso é coberto por
+## enemy_definition_tests.gd) — só monta um único grupo em memória via `groups_override`
+## (`EnemyDefinition.new()` sintético, sem precisar de um `.tres` real em disco).
 func _build_wave(enemy_count: int, spawn_interval: float, reward_per_kill: int = 5, wave_completion_reward: int = 20) -> WaveDefinition:
+	var enemy_def := EnemyDefinition.new()
+	enemy_def.reward_per_kill = reward_per_kill
 	var wave := WaveDefinition.new()
-	wave.enemy_count = enemy_count
-	wave.spawn_interval = spawn_interval
-	wave.reward_per_kill = reward_per_kill
+	wave.groups_override = [WaveEnemyGroup.new(enemy_def, enemy_count, spawn_interval)]
 	wave.wave_completion_reward = wave_completion_reward
 	return wave
 
@@ -209,3 +216,69 @@ func _test_has_next_wave() -> void:
 	_check(manager.has_next_wave(), "should have a next wave before starting any")
 	manager.start_next_wave()
 	_check(not manager.has_next_wave(), "should not have a next wave after starting the only one available")
+
+
+## V2 — "waves intermediárias: combinação de inimigos" (ver EnemyDefinition/WaveEnemyGroup):
+## um grupo só começa a spawnar depois que o grupo anterior termina, mesmo que os dois usem
+## intervalos diferentes.
+func _test_wave_with_multiple_groups_spawns_second_group_only_after_first_finishes() -> void:
+	var spawner := _build_enemy_spawner()
+	var economy := _make_economy()
+
+	var group_a_def := EnemyDefinition.new()
+	group_a_def.display_name = "A"
+	var group_b_def := EnemyDefinition.new()
+	group_b_def.display_name = "B"
+
+	var wave := WaveDefinition.new()
+	wave.groups_override = [
+		WaveEnemyGroup.new(group_a_def, 2, 1.0),
+		WaveEnemyGroup.new(group_b_def, 3, 0.5),
+	]
+	var manager := _build_wave_manager([wave], spawner, economy)
+
+	manager.start_next_wave()
+	manager.step(1.0)  # spawna A #1
+	manager.step(1.0)  # spawna A #2 — grupo A completo (2/2)
+	_check(spawner.get_active_enemies().size() == 2, "deveriam existir 2 inimigos do grupo A antes do grupo B começar")
+	for enemy in spawner.get_active_enemies():
+		_check(enemy.definition == group_a_def, "os 2 primeiros inimigos deveriam ser do grupo A")
+
+	manager.step(0.5)  # grupo B começa: spawna B #1
+	_check(spawner.get_active_enemies().size() == 3, "grupo B deveria começar a spawnar assim que o grupo A terminar")
+	_check(spawner.get_active_enemies()[2].definition == group_b_def, "o 3º inimigo deveria já ser do grupo B")
+
+	manager.step(0.5)  # B #2
+	manager.step(0.5)  # B #3 — wave inteira (2 + 3) spawnada
+	_check(spawner.get_active_enemies().size() == 5, "wave deveria ter spawnado os 5 inimigos dos 2 grupos ao todo, got %d" % spawner.get_active_enemies().size())
+	_check(manager.state == WaveManager.State.WAITING_FOR_CLEAR,
+		"depois do último grupo spawnar tudo, o estado deveria virar WAITING_FOR_CLEAR")
+
+
+## V2 — reward_per_kill agora vem do EnemyDefinition de CADA inimigo (não mais um valor único por
+## wave) — necessário pra uma wave mista fazer sentido economicamente (Tanque vale mais que Enxame).
+func _test_reward_per_kill_comes_from_each_enemys_own_definition() -> void:
+	var spawner := _build_enemy_spawner()
+	var economy := _make_economy(0)
+
+	var cheap_def := EnemyDefinition.new()
+	cheap_def.reward_per_kill = 2
+	var expensive_def := EnemyDefinition.new()
+	expensive_def.reward_per_kill = 20
+
+	var wave := WaveDefinition.new()
+	wave.groups_override = [
+		WaveEnemyGroup.new(cheap_def, 1, 0.1),
+		WaveEnemyGroup.new(expensive_def, 1, 0.1),
+	]
+	var manager := _build_wave_manager([wave], spawner, economy)
+
+	manager.start_next_wave()
+	manager.step(0.1)  # spawna o "barato"
+	spawner.get_active_enemies()[0].take_damage(999)
+	_check(economy.coins == 2, "matar o inimigo 'barato' deveria dar só a recompensa dele (2), got %d" % economy.coins)
+
+	manager.step(0.1)  # spawna o "caro"
+	spawner.get_active_enemies()[0].take_damage(999)
+	_check(economy.coins == 2 + 20,
+		"matar o inimigo 'caro' deveria somar a recompensa DELE (20), não repetir a do primeiro, got %d" % economy.coins)

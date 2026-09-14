@@ -529,6 +529,45 @@ sem silhueta/paleta alterada, só correções objetivas de integração.
       novamente e confirmada inviável nesta plataforma (trava indefinidamente); validado só por
       composição matemática (posições exatas lidas do mapa real, não estimadas)
 
+#### Sprint 1 — Espécie/Tier/Fusão + Waves Automáticas (V1)
+
+Roster reduzido a 3 espécies definitivas para a V1 (Velociraptor, Triceratops, T-Rex); sistema
+genérico de tier/fusão; seleção de dinossauro real (popup); progressão automática de waves com
+countdown. Documentação técnica completa desta rodada fica registrada nos commits
+(`5de1296`, `1173975`, `58e7a40`) e no código (docstrings extensos em cada arquivo tocado) — esta
+entrada é só o resumo funcional, não repete o detalhamento já presente nos scripts.
+
+- [x] `DinosaurDefinition.species_id`/`tier`/`sprite_frames`/`evolves_to`; `Cell.occupant`
+      (referência real ao `Dinosaur`, não só bool) — necessário pra fusão comparar espécie/tier de
+      quem já ocupa uma célula
+- [x] `Fusion` (regra pura: mesma espécie + mesmo tier + tier < 3 → próxima definição) +
+      `PlacementController.try_fuse()` — genérico, zero `if species_id == ...`
+- [x] `AuraEffect` conectado a qualquer T3 (`has_aura()`, não hardcoded por espécie)
+- [x] Arte PixelLab integrada: Velociraptor T1/T2/T3 (T1 com 4 animações completas, T2/T3 pose
+      base), Triceratops T1 e T-Rex T1 (4 animações completas cada, pose base sem T2/T3 — ver
+      decisão V2 em [GAME_BIBLE.md](GAME_BIBLE.md#future-ideas))
+- [x] Fusão jogável via clique real (2 cliques em dinossauros já colocados); resolução de clique
+      por área visual real do sprite (não só a célula 32×32) — sprites de tier alto ultrapassam a
+      célula onde estão registrados
+- [x] Redução de escala de exibição (65%) + Y-sort no container de dinossauros — mitiga
+      sobreposição visual quando vários são colocados próximos
+- [x] Seleção de dinossauro via popup (Velociraptor/Triceratops/T-Rex com preço — 20/25/35),
+      substituindo um botão único que só ciclava
+- [x] **Progressão automática de waves:** wave completa → banner "WAVE X COMPLETE" → countdown
+      determinístico "3, 2, 1, GO!" (reaproveita o banner existente, sem elemento de UI novo) →
+      próxima wave inicia sozinha; botão manual "Iniciar Onda" continua funcionando a qualquer
+      momento e nunca conflita com o auto-start (`WaveManager.start_next_wave()` já era
+      idempotente); última wave continua levando à vitória normalmente
+- [x] Teste de ponta a ponta: campanha completa (3 waves reais) jogada do 1º clique manual até a
+      vitória, sem nenhuma outra interação — confirma que o loop principal inteiro (colocar →
+      ondas automáticas → combate → vitória) funciona de fato, não só por partes isoladas
+- [x] `run_tests.ps1`: 27 suítes, 60 scripts, todos verdes; nenhum log de diagnóstico temporário
+      deixado no código; Velociraptor procedural legado (Phase 0.4-0.6) permanece intocado
+- [ ] Triceratops/T-Rex T2/T3 — **V2**, ver [GAME_BIBLE.md](GAME_BIBLE.md#future-ideas)
+- [ ] `docs/ARCHITECTURE.md` ainda descreve o estado técnico até a Phase 0.6 em detalhe — pendente
+      de uma atualização completa cobrindo Sprint 1 (registrado como dívida de documentação, não
+      bloqueia gameplay)
+
 ## Phase 1 — Core Prototype
 
 **Objetivo:** protótipo jogável mínimo validando o core loop (uma torre, um inimigo, um

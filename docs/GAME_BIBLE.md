@@ -250,3 +250,11 @@ acabamento sofisticado o suficiente para agradar também jogadores adultos.
 - Especializações de evolução por dinossauro além do exemplo ilustrativo do Velociraptor.
 - Comportamentos especializados adicionais de inimigos (ver [Enemies](#enemies)).
 - Sistemas de recompensa futuros além das fontes de economia já listadas.
+- **V2 — Tiers T2/T3 para Triceratops e T-Rex.** O sistema de tiers/fusão (T1+T1→T2, T2+T2→T3
+  com aura, mesma espécie/mesmo tier) é genérico e já funciona para qualquer espécie — hoje só o
+  Velociraptor tem arte T2/T3 real (`evolves_to` aponta pro próximo tier). Triceratops e T-Rex
+  ficam **intencionalmente T1-only na V1** (`evolves_to = null`, fundir 2 do mesmo tier não faz
+  nada) — decisão explícita para não gastar créditos PixelLab nem introduzir arte
+  recolorida/procedural como identidade visual definitiva sem aprovação. Sem código adicional
+  necessário quando essa arte existir: basta popular `triceratops_t2/t3.tres`/`trex_t2/t3.tres`
+  com `sprite_frames` e apontar `evolves_to` no T1 de cada espécie.

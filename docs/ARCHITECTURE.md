@@ -27,6 +27,18 @@ quando a arquitetura mudar de fato.
 > (`Tween` sobre forma primitiva), fora do escopo desta rodada. Sem economia
 > premium, loja, login real, persistência, novos dinossauros/inimigos, upgrades ou multiplayer.
 > Seções abaixo descrevem o que existe de fato; o que ainda não existe permanece `TBD`.
+>
+> **Atualização (Sprint 1 — V1):** desde o snapshot acima, o roster foi fechado em 3 espécies
+> (Velociraptor/Triceratops/T-Rex, cada uma com arte PixelLab real em T1) com sistema genérico de
+> tier/fusão (`species_id`+`tier`+`evolves_to` em `DinosaurDefinition`, `Fusion`/
+> `PlacementController.try_fuse()`, `AuraEffect` em qualquer T3), seleção de dinossauro via popup
+> na HUD, e progressão automática de waves com countdown "3,2,1,GO!" (`Main.step()`,
+> determinístico, sem `get_tree().create_timer()`). Resumo funcional em
+> [ROADMAP.md](ROADMAP.md#sprint-1--espécietierfusão--waves-automáticas-v1); as seções detalhadas
+> abaixo (Cenas, Sistemas, PlacementController, etc.) ainda descrevem o estado até a Phase 0.6 e
+> **não foram reescritas** para refletir o Sprint 1 — dívida de documentação conhecida, não
+> bloqueia gameplay. Triceratops/T-Rex ficam intencionalmente sem T2/T3 nesta versão (ver
+> [GAME_BIBLE.md](GAME_BIBLE.md#future-ideas)).
 
 ---
 

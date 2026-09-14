@@ -21,6 +21,10 @@ extends SceneTree
 ## Executar com:
 ##   godot --headless --path game --script res://tests/game_loop_integration_tests.gd
 
+## Tipagem via script anônimo (mesmo motivo de main.gd/map_select.gd — `class_name` colidiria
+## com o autoload "GameSession").
+const _GameSessionScript := preload("res://scripts/core/game_session.gd")
+
 var _failures: int = 0
 
 
@@ -41,6 +45,7 @@ func _initialize() -> void:
 	await _test_wave_auto_starts_after_completion_interval()
 	await _test_manual_start_during_auto_start_interval_is_not_broken_by_it()
 	await _test_no_auto_start_scheduled_after_victory()
+	await _test_main_uses_map_selected_via_game_session()
 
 	if _failures == 0:
 		print("[game_loop_integration_tests] ALL TESTS PASSED")
@@ -564,6 +569,36 @@ func _test_manual_start_during_auto_start_interval_is_not_broken_by_it() -> void
 
 	root.remove_child(main)
 	main.free()
+
+
+## V2 — seleção de mapa (GameSession/MapSelect.tscn): confirma que Main.tscn realmente usa o mapa
+## escolhido via GameSession.select_map() ANTES de instanciar a cena, e que a seleção é CONSUMIDA
+## (não vaza pra uma partida seguinte que não passou pela tela de seleção de novo).
+func _test_main_uses_map_selected_via_game_session() -> void:
+	var game_session := root.get_node("GameSession") as _GameSessionScript
+	game_session.select_map("res://data/maps/trilha_sinuosa.tres")
+
+	var main := _load_main()
+	root.add_child(main)
+	await process_frame
+
+	var grid_manager := main.get_node("GridManager") as GridManager
+	_check(grid_manager.map_definition == load("res://data/maps/trilha_sinuosa.tres"),
+		"GridManager.map_definition deveria ser exatamente o mapa selecionado via GameSession")
+
+	root.remove_child(main)
+	main.free()
+
+	# Confirma que a seleção foi CONSUMIDA — uma 2ª partida sem nova seleção volta ao default do
+	# próprio Main.tscn (Vale dos Ovos), não herda silenciosamente a escolha da partida anterior.
+	var main2 := _load_main()
+	root.add_child(main2)
+	await process_frame
+	var grid_manager2 := main2.get_node("GridManager") as GridManager
+	_check(grid_manager2.map_definition == load("res://data/maps/vale_dos_ovos.tres"),
+		"sem nova seleção, a 2ª partida deveria voltar ao mapa default (Vale dos Ovos)")
+	root.remove_child(main2)
+	main2.free()
 
 
 ## Última wave (vitória) não agenda nenhum auto-start — não existe próxima wave pra iniciar.

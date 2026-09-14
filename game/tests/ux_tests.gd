@@ -11,6 +11,10 @@ extends SceneTree
 ## Executar com:
 ##   godot --headless --path game --script res://tests/ux_tests.gd
 
+## Tipagem via script anônimo (mesmo motivo de main.gd/map_select.gd — `class_name` colidiria
+## com o autoload "GameSession").
+const _GameSessionScript := preload("res://scripts/core/game_session.gd")
+
 var _failures: int = 0
 
 
@@ -27,6 +31,7 @@ func _initialize() -> void:
 	await _test_wave_banners_via_main()
 	await _test_dinosaur_button_allows_second_placement()
 	await _test_victory_banner_after_last_wave()
+	await _test_map_select_lists_maps_and_selecting_one_stores_it_in_game_session()
 
 	if _failures == 0:
 		print("[ux_tests] ALL TESTS PASSED")
@@ -235,3 +240,38 @@ func _test_victory_banner_after_last_wave() -> void:
 
 	root.remove_child(main)
 	main.free()
+
+
+## V2 — MapSelect.tscn (entre MainMenu e Main): confirma que a tela carrega, lista um botão por
+## mapa disponível (criados em runtime, não pré-existentes no .tscn — ver map_select.gd), e que
+## escolher um grava o path certo em GameSession antes de navegar.
+func _test_map_select_lists_maps_and_selecting_one_stores_it_in_game_session() -> void:
+	var packed := load("res://scenes/MapSelect.tscn") as PackedScene
+	_check(packed != null, "MapSelect.tscn should load")
+	if packed == null:
+		return
+
+	var map_select := packed.instantiate()
+	root.add_child(map_select)
+	await process_frame
+
+	var map_list := map_select.get_node_or_null("MapList") as VBoxContainer
+	_check(map_list != null, "MapSelect deveria ter um MapList")
+	if map_list == null:
+		root.remove_child(map_select)
+		map_select.free()
+		return
+	_check(map_list.get_child_count() >= 3,
+		"MapSelect deveria listar ao menos os 3 mapas disponíveis, got %d" % map_list.get_child_count())
+
+	var back_button := map_select.get_node_or_null("BackButton") as Button
+	_check(back_button != null, "MapSelect deveria ter um BackButton")
+
+	var game_session := root.get_node("GameSession") as _GameSessionScript
+	var second_map_button := map_list.get_child(1) as Button
+	second_map_button.pressed.emit()
+	_check(game_session.consume_selected_map_path() == "res://data/maps/trilha_sinuosa.tres",
+		"escolher o 2º mapa da lista deveria gravar o path da Trilha Sinuosa em GameSession")
+
+	root.remove_child(map_select)
+	map_select.free()

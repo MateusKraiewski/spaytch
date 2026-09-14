@@ -68,6 +68,22 @@ const _OBSTACLE_DECORATIONS: Array[Texture2D] = [
 
 
 func _ready() -> void:
+	_build_grid()
+
+
+## V2 — permite trocar o mapa ANTES da partida realmente usá-lo (seleção de mapa, ver
+## GameSession/map_select.gd). Precisa ser chamado bem no topo de `Main._ready()`, antes de
+## qualquer outro sistema (EnemySpawner/EggManager/PlacementController) consumir `grid`/
+## `map_definition`: como `GridManager` é filho de `Main`, o próprio `_ready()` dele já roda
+## ANTES do `_ready()` do pai (propagação bottom-up do Godot) e já constrói `grid` a partir do
+## `map_definition` default do `.tscn` — sem chamar isto de novo depois, a troca chegaria tarde
+## demais (grid já construído com o mapa errado).
+func set_map_definition(new_definition: MapDefinition) -> void:
+	map_definition = new_definition
+	_build_grid()
+
+
+func _build_grid() -> void:
 	assert(map_definition != null, "GridManager requires a MapDefinition assigned.")
 	var errors := MapValidator.validate(map_definition)
 	for error in errors:

@@ -1,10 +1,11 @@
 extends Control
 ## Cena de entrada do jogo (BOOT -> MAIN MENU), separada da cena de jogo
-## (Main.tscn) — só navega, nenhuma lógica de gameplay aqui. Nenhum estado é
-## compartilhado entre esta cena e o jogo (ver docs/ARCHITECTURE.md, "Phase
-## 0.6"): `get_tree().change_scene_to_file()` é suficiente, sem precisar de
-## nenhum GameSession/autoload — o jogo reconstrói tudo do zero em Main.tscn
-## a cada "JOGAR".
+## (Main.tscn) — só navega, nenhuma lógica de gameplay aqui.
+##
+## V2 — "JOGAR" agora vai para `MapSelect.tscn` (escolha de mapa) em vez de `Main.tscn` direto;
+## a única informação que atravessa essa fronteira de cena (qual mapa foi escolhido) vive em
+## `GameSession` (autoload mínimo, ver seu próprio doc comment sobre a justificativa) — nenhum
+## outro estado de partida atravessa cenas.
 ##
 ## "Opções" ainda não existe como tela (fora de escopo desta fase) — o botão
 ## já existe na navegação para que uma tela de opções (e, no futuro, login/
@@ -23,7 +24,7 @@ func _ready() -> void:
 
 
 func _on_play_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/Main.tscn")
+	get_tree().change_scene_to_file("res://scenes/MapSelect.tscn")
 
 
 func _on_options_pressed() -> void:

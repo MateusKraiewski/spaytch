@@ -36,6 +36,10 @@ const _WAVE_PATHS := [
 	"res://data/waves/wave_03.tres",
 ]
 
+## Tipagem via script anônimo (não `class_name` — colidiria com o autoload "GameSession"; ver
+## game_session.gd) só para poder chamar `.consume_selected_map_path()` com checagem estática.
+const _GameSessionScript := preload("res://scripts/core/game_session.gd")
+
 ## Sprint 1, Etapa 4 — seleção mínima entre as 3 espécies: um único botão
 ## (já existente na HUD) cicla por esta lista a cada clique, em vez de criar
 ## um botão por espécie ou qualquer UI de escolha nova. Mesmo padrão de
@@ -101,6 +105,20 @@ var _wave_intermission_timer: float = -1.0
 
 func _ready() -> void:
 	Engine.time_scale = 1.0  # evita herdar time_scale de uma instância anterior (ex: em testes)
+
+	# V2 — seleção de mapa (ver GameSession/map_select.gd): PRECISA ser a primeiríssima coisa,
+	# antes de qualquer leitura de _grid_manager.grid/map_definition — GridManager já construiu o
+	# grid a partir do default do .tscn no próprio _ready() dele (roda antes deste, propagação
+	# bottom-up do Godot); trocar depois disso já seria tarde demais. String vazia (nenhuma
+	# seleção pendente — ex: Main.tscn aberto direto no editor, ou fluxo de teste que não passou
+	# pela tela de seleção) preserva o comportamento de sempre (mapa default do .tscn, Vale dos
+	# Ovos).
+	var game_session := get_node("/root/GameSession") as _GameSessionScript
+	var selected_map_path := game_session.consume_selected_map_path()
+	if not selected_map_path.is_empty():
+		var selected_map := load(selected_map_path) as MapDefinition
+		if selected_map != null:
+			_grid_manager.set_map_definition(selected_map)
 
 	_input_manager.pointer_moved.connect(_grid_manager.on_pointer_moved)
 	_input_manager.pointer_pressed.connect(_grid_manager.on_pointer_pressed)

@@ -27,6 +27,7 @@ func _initialize() -> void:
 	_test_vale_dos_ovos_spawn_and_nest_count()
 	_test_vale_dos_ovos_has_path_buildable_obstacles()
 	_test_vale_dos_ovos_passes_validation()
+	_test_every_playable_map_passes_validation_and_has_a_valid_path()
 
 	if _failures == 0:
 		print("[map_tests] ALL TESTS PASSED")
@@ -168,3 +169,28 @@ func _test_vale_dos_ovos_passes_validation() -> void:
 	var definition := _load_vale_dos_ovos()
 	var errors := MapValidator.validate(definition)
 	_check(errors.is_empty(), "Vale dos Ovos deveria passar em MapValidator sem erros, gerou: %s" % [errors])
+
+
+## V2 — cada mapa novo (Trilha Sinuosa, Delta Verdejante, ...) passa pelas MESMAS 2 checagens
+## genéricas que Vale dos Ovos já passava: `MapValidator` sem erros E `MapPath.build()` sem
+## bifurcação/loop/célula solta (checagem mais estrita que `MapValidator` sozinho não cobre — ver
+## `tools/map_builder.gd`, usado pra gerar estes `.tres`). Lista cresce conforme novos mapas
+## entrarem (V2, meta de 10) sem precisar de uma função de teste nova por mapa.
+const _ALL_PLAYABLE_MAP_PATHS := [
+	"res://data/maps/vale_dos_ovos.tres",
+	"res://data/maps/trilha_sinuosa.tres",
+	"res://data/maps/delta_verdejante.tres",
+]
+
+
+func _test_every_playable_map_passes_validation_and_has_a_valid_path() -> void:
+	for map_path in _ALL_PLAYABLE_MAP_PATHS:
+		var definition := load(map_path) as MapDefinition
+		_check(definition != null, "%s deveria carregar como MapDefinition" % map_path)
+		if definition == null:
+			continue
+		var errors := MapValidator.validate(definition)
+		_check(errors.is_empty(), "%s deveria passar em MapValidator sem erros, gerou: %s" % [map_path, errors])
+		var map_path_result := MapPath.build(definition)
+		_check(map_path_result != null,
+			"%s deveria produzir um MapPath válido (sem bifurcação/loop/célula PATH solta)" % map_path)
